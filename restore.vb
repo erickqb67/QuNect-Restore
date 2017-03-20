@@ -11,17 +11,64 @@ Imports System.Web
 
 
 Public Class frmRestore
+    Private Structure fieldStruct
+        Public fid As String
+        Public label As String
+        Public type As String
+        Public parentFieldID As String
+        Public unique As Boolean
+        Public required As Boolean
+        Public base_type As String
+        Public decimal_places As Integer
+    End Structure
     Private qdb As QuickBaseClient
     Private Const AppName = "QuNectRestore"
-    Dim fieldNodes As XmlNodeList
-    Dim schemaXML As XmlDocument
-    Dim clist As String()
-    Dim rids As HashSet(Of String) = Nothing
-    Dim keyfid As String
-    Dim uniqueFieldValues As Hashtable
-    Dim frmErr As New frmErr
-    Private Function restoreTable(checkForErrorsOnly As Boolean) As Boolean
+    Private fieldNodes As Dictionary(Of String, fieldStruct)
+    Private schemaXML As XmlDocument
+    Private clist As String()
+    Private fieldTypes As String()
+    Private rids As HashSet(Of String)
+    Private keyfid As String
+    Private uniqueFieldValues As Hashtable
+    Private sourceLabelToFieldType As Dictionary(Of String, String)
+    Private sourceFieldNames As New Dictionary(Of String, Integer)
+    Private destinationLabelsToFids As Dictionary(Of String, String)
+    Private isBooleanTrue As Regex = New Regex("y|tr|c|[1-9]", RegexOptions.IgnoreCase Or RegexOptions.Compiled)
+    Private Class qdbVersion
+        Public year As Integer
+        Public major As Integer
+        Public minor As Integer
+    End Class
+    Private qdbVer As qdbVersion = New qdbVersion
+    Enum mapping
+        source
+        destination
+    End Enum
+    Enum filter
+        source
+        booleanOperator
+        criteria
+    End Enum
+    Enum comparisonResult
+        equal
+        notEqual
+        greater
+        less
+        null
+    End Enum
+    Enum errorTabs
+        missing
+        conversions
+        required
+        unique
+        malformed
+    End Enum
+    Private Function restoreTable(checkForErrorsOnly As Boolean, previewOnly As Boolean) As Boolean
         restoreTable = True
+
+        Dim dsPreview As New DataSet
+        Dim dtPreview As New DataTable
+        Dim drPreview As DataRow = Nothing
 
         Dim dbid As String = Regex.Replace(lblTable.Text, "^.* ", "")
         'need to create the SQL statement
@@ -41,15 +88,22 @@ Public Class frmRestore
         Dim uniqueFieldErrors As String = ""
         Dim ridIsMapped As Boolean = False
         For i As Integer = 0 To dgMapping.Rows.Count - 1
-            Dim destComboBoxCell As DataGridViewComboBoxCell = DirectCast(dgMapping.Rows(i).Cells(3), System.Windows.Forms.DataGridViewComboBoxCell)
+            Dim destComboBoxCell As DataGridViewComboBoxCell = DirectCast(dgMapping.Rows(i).Cells(mapping.destination), System.Windows.Forms.DataGridViewComboBoxCell)
             If destComboBoxCell.Value Is Nothing Then Continue For
             Dim destDDIndex = destComboBoxCell.Items.IndexOf(destComboBoxCell.Value)
 
             If destDDIndex > 0 Then
                 'this is a field that needs importing
-                Dim fieldNode As XmlNode = fieldNodes(destDDIndex - 1)
+                Dim fieldNode As fieldStruct = fieldNodes(destinationLabelsToFids(destComboBoxCell.Value))
+                Dim label As String = fieldNode.label
+                If fieldNode.parentFieldID <> "" Then
+                    label = fieldNodes(fieldNode.parentFieldID).label & ": " & label
+                End If
+                If previewOnly Then
+                    dtPreview.Columns.Add(New DataColumn(label, Type.GetType("System.String")))
+                End If
                 fields.Add(fieldNode)
-                Dim fid As String = fieldNode.SelectSingleNode("@id").InnerText
+                Dim fid As String = fieldNode.fid
                 If fidsForImport.Contains(fid) Then
                     MsgBox("You cannot import two different columns into the same field: " & destComboBoxCell.Value, MsgBoxStyle.OkOnly, AppName)
                     restoreTable = False
@@ -60,95 +114,67 @@ Public Class frmRestore
                 fids.Add(fid)
                 vals.Add("?")
                 importThese.Add(i)
-                fieldLabels.Add(fieldNode.SelectSingleNode("label").InnerText)
+                fieldLabels.Add(label)
             End If
         Next
         'now we need to look for unique fields
-        If Not schemaXML.SelectSingleNode("/*/table/original/key_fid") Is Nothing Then
-            keyfid = schemaXML.SelectSingleNode("/*/table/original/key_fid").InnerText()
-        Else
-            keyfid = "3"
-        End If
-        'also need to pull all the fields marked required
-        If checkForErrorsOnly Then
+        Dim restrictions(1) As String
+        restrictions(0) = dbid
+        Dim connectionString As String = "Driver={QuNect ODBC For QuickBase};uid=" & txtUsername.Text & ";pwd=" & txtPassword.Text & ";QUICKBASESERVER=" & txtServer.Text & ";USEFIDS=1;APPTOKEN=" & txtAppToken.Text
+        Using connection As OdbcConnection = getquNectConn(connectionString)
+            If connection Is Nothing Then Exit Function
+            'also need to pull all the fields marked required
+            If checkForErrorsOnly Then
             frmErr.rdbCancel.Checked = True
             uniqueFieldValues = New Hashtable
-            For i As Integer = 0 To fieldNodes.Count - 1
-                Dim fid As String = fieldNodes(i).SelectSingleNode("@id").InnerText()
-                If Not fieldNodes(i).SelectSingleNode("unique") Is Nothing AndAlso fieldNodes(i).SelectSingleNode("unique").InnerText() = "1" Then
-                    If Not fidsForImport.Contains(fid) Then
-                        requiredFieldsErrors &= "You must import values into the unique field: " & fieldNodes(i).SelectSingleNode("label").InnerText()
-                        restoreTable = False
-                    ElseIf fid <> keyfid Then
-                        'we also need to keep a list of the unique fields that we're importing into to check and make sure all imported values are unique
-                        uniqueFidsForImport.Add(fid)
-                        'do we need this hashset to check the imported values? We would need to check to see if we were updating an existing record or creating a new record
-                        'if we have a 
-                        If Not ridIsMapped Then
-                            uniqueFieldValues.Add(fid, qdb.getHashSetofFieldValues(dbid, fid))
+
+                For Each field As KeyValuePair(Of String, fieldStruct) In fieldNodes
+                    Dim fid As String = field.Value.fid
+
+                    If field.Value.unique Then
+                        If Not fidsForImport.Contains(fid) Then
+                            requiredFieldsErrors &= "You must import values into the unique field: " & field.Value.label
+                            restoreTable = False
+                        ElseIf fid <> keyfid Then
+                            'we also need to keep a list of the unique fields that we're importing into to check and make sure all imported values are unique
+                            uniqueFidsForImport.Add(fid)
+                            'do we need this hashset to check the imported values? We would need to check to see if we were updating an existing record or creating a new record
+                            'if we have a 
+                            If Not ridIsMapped Then
+                                uniqueFieldValues.Add(fid, qdb.getHashSetofFieldValues(dbid, fid))
+                            End If
                         End If
                     End If
-                End If
-                If Not fieldNodes(i).SelectSingleNode("required") Is Nothing AndAlso fieldNodes(i).SelectSingleNode("required").InnerText() = "1" Then
-                    If Not fidsForImport.Contains(fid) Then
-                        requiredFieldsErrors &= "You must import values into the required field: " & fieldNodes(i).SelectSingleNode("label").InnerText()
-                        restoreTable = False
-                    Else
-                        'we also need to keep a list of the required fields that we're importing into
-                        requiredFidsForImport.Add(fid)
+                    If field.Value.required Then
+                        If Not fidsForImport.Contains(fid) Then
+                            requiredFieldsErrors &= "You must import values into the required field: " & field.Value.label
+                            restoreTable = False
+                        Else
+                            'we also need to keep a list of the required fields that we're importing into
+                            requiredFidsForImport.Add(fid)
+                        End If
                     End If
-                End If
-            Next
-        End If
+                Next
+            End If
         If ridIsMapped And checkForErrorsOnly Then
             'need to pull in all the rids from QuickBase
             rids = qdb.getHashSetofFieldValues(dbid, "3")
+        Else
+            rids.Clear()
         End If
-        Dim connectionString As String = "Driver={QuNect ODBC for QuickBase};uid=" & txtUsername.Text & ";pwd=" & txtPassword.Text & ";QUICKBASESERVER=" & txtServer.Text & ";USEFIDS=1;APPTOKEN=" & txtAppToken.Text
-        Using connection As OdbcConnection = New OdbcConnection(connectionString)
-            connection.Open()
             strSQL &= "fid" & String.Join(",fid", fids.ToArray)
             strSQL &= ") VALUES ("
             strSQL &= String.Join(",", vals.ToArray)
             strSQL &= ")"
             Using command As OdbcCommand = New OdbcCommand(strSQL, connection)
                 For i As Integer = 0 To fids.Count - 1
-                    Dim fieldNode As XmlNode = fields(i)
-                    Dim basetype As String = fieldNode.SelectSingleNode("@base_type").InnerText
-                    Dim qdbType As OdbcType
-                    Select Case basetype
-                        Case "text"
-                            qdbType = OdbcType.VarChar
-                        Case "float"
-                            If Not fieldNode.SelectSingleNode("decimal_places") Is Nothing AndAlso fieldNode.SelectSingleNode("decimal_places").InnerText <> "" Then
-                                qdbType = OdbcType.Numeric
-                            Else
-                                qdbType = OdbcType.Double
-                            End If
-
-                        Case "bool"
-                            qdbType = OdbcType.Bit
-                        Case "int32"
-                            qdbType = OdbcType.Int
-                        Case "int64"
-                            Select Case fieldNode.SelectSingleNode("@field_type").InnerText
-                                Case "timestamp"
-                                    qdbType = OdbcType.DateTime
-                                Case "timeofday"
-                                    qdbType = OdbcType.Time
-                                Case "duration"
-                                    qdbType = OdbcType.Double
-                                Case Else
-                                    qdbType = OdbcType.Date
-                            End Select
-                        Case Else
-                            qdbType = OdbcType.VarChar
-                    End Select
+                    Dim qdbType As OdbcType = getODBCTypeFromQuickBaseFieldNode(fieldNodes(fids(i)))
                     command.Parameters.Add("@fid" & fids(i), qdbType) 'we need to set the type here according to the field schema
                 Next
                 Dim csvReader As New Microsoft.VisualBasic.FileIO.TextFieldParser(lblFile.Text)
                 csvReader.TextFieldType = Microsoft.VisualBasic.FileIO.FieldType.Delimited
                 csvReader.Delimiters = New String() {","}
+                csvReader.HasFieldsEnclosedInQuotes = True
                 Dim currentRow As String()
                 'Loop through all of the fields in the file. 
                 Dim transaction As OdbcTransaction = Nothing
@@ -156,71 +182,72 @@ Public Class frmRestore
                 command.Transaction = transaction
                 command.CommandType = CommandType.Text
                 command.CommandTimeout = 0
-                If Not csvReader.EndOfData And chkBxHeaders.Checked Then currentRow = csvReader.ReadFields()
                 Dim lineCounter As Integer = 0
                 Dim fileLineCounter As Integer = 0
+                If Not csvReader.EndOfData And chkBxHeaders.Checked Then
+                    currentRow = csvReader.ReadFields()
+                    fileLineCounter = 1
+                End If
                 Try
+                    pb.Value = 0
                     pb.Visible = True
                     pb.Maximum = 1000
                     While Not csvReader.EndOfData
                         Try
-                            currentRow = csvReader.ReadFields()
-                            'here we need to walk down the rows of the datagrid to see if we need to exclude this row
-                            Dim skipRow As Boolean = False
-                            For i As Integer = 0 To dgMapping.Rows.Count - 1
-                                Dim cellValue As String = currentRow(i)
-                                Dim op As String = DirectCast(dgMapping.Rows(i).Cells(1), System.Windows.Forms.DataGridViewComboBoxCell).Value
-                                Select Case op
-                                    Case "has any value"
-                                        Continue For
-                                    Case "equals"
-                                        If cellValue <> DirectCast(dgMapping.Rows(i).Cells(2), System.Windows.Forms.DataGridViewTextBoxCell).Value Then
-                                            skipRow = True
-                                            Exit For
-                                        End If
+                            lblProgress.Text = "Reading CSV line " & fileLineCounter & " found " & lineCounter & " records for import."
+                            If previewOnly Then
+                                lblMode.Text = "Applying import criteria and checking for errors to display a preview of the import."
+                            ElseIf checkForErrorsOnly Then
+                                lblMode.Text = "Applying import criteria and checking for errors in advance of importing."
+                            Else
+                                lblMode.Text = "Applying import criteria and importing."
+                            End If
 
-                                    Case "does not equal"
-                                        If cellValue = DirectCast(dgMapping.Rows(i).Cells(2), System.Windows.Forms.DataGridViewTextBoxCell).Value Then
-                                            skipRow = True
-                                            Exit For
-                                        End If
-                                    Case "contains"
-                                        If Not cellValue.Contains(DirectCast(dgMapping.Rows(i).Cells(2), System.Windows.Forms.DataGridViewTextBoxCell).Value) Then
-                                            skipRow = True
-                                            Exit For
-                                        End If
-                                    Case "starts with"
-                                        If Not cellValue.StartsWith(DirectCast(dgMapping.Rows(i).Cells(2), System.Windows.Forms.DataGridViewTextBoxCell).Value) Then
-                                            skipRow = True
-                                            Exit For
-                                        End If
-                                    Case "does not contain"
-                                        If cellValue.Contains(DirectCast(dgMapping.Rows(i).Cells(2), System.Windows.Forms.DataGridViewTextBoxCell).Value) Then
-                                            skipRow = True
-                                            Exit For
-                                        End If
-                                    Case "does not start with"
-                                        If cellValue.StartsWith(DirectCast(dgMapping.Rows(i).Cells(2), System.Windows.Forms.DataGridViewTextBoxCell).Value) Then
-                                            skipRow = True
-                                            Exit For
-                                        End If
-                                End Select
+                            fileLineCounter += 1
+                            Application.DoEvents()
+                            currentRow = csvReader.ReadFields()
+                            'here we need to walk down the rows of the criteria datagrid to see if we need to exclude this row
+                            Dim skipRow As Boolean = False
+                            For i As Integer = 0 To dgCriteria.Rows.Count - 1
+                                Dim sourceLabel As String = DirectCast(dgCriteria.Rows(i).Cells(mapping.source), System.Windows.Forms.DataGridViewComboBoxCell).Value
+                                If sourceLabel Is Nothing Then Continue For
+                                Dim fieldType As String = sourceLabelToFieldType(sourceLabel)
+                                Dim cellValue As String = currentRow(sourceFieldNames(sourceLabel))
+                                Dim op As String = DirectCast(dgCriteria.Rows(i).Cells(filter.booleanOperator), System.Windows.Forms.DataGridViewComboBoxCell).Value
+                                Dim criteria As String = DirectCast(dgCriteria.Rows(i).Cells(filter.criteria), System.Windows.Forms.DataGridViewTextBoxCell).Value
+                                If skipThisRow(op, cellValue, criteria, fieldType) Then
+                                    skipRow = True
+                                    Exit For
+                                End If
                             Next
                             If skipRow Then
                                 Continue While
                             End If
                             'This is a row we need to import
+                            If previewOnly Then
+                                drPreview = dtPreview.NewRow()
+                            End If
                             For i As Integer = 0 To importThese.Count - 1
                                 Dim val As String = currentRow(importThese(i))
+                                If previewOnly Then
+                                    drPreview(i) = val
+                                End If
                                 If checkForErrorsOnly Then
                                     If fids(i) = "3" AndAlso Not rids.Contains(val) Then
                                         'here we're going to have a problem because this record no longer exists in QuickBase
+                                        'we could update all the child tables with the newly minted Record ID#s
+                                        'but we wouid have to do one record at a time to accomplish this
                                         missingRIDs &= vbCrLf & "line " & fileLineCounter + 1 & " has Record ID# " & val & " which no longer exists"
+                                        If missingRIDs.Length > 1000 Then
+                                            missingRIDs &= vbCrLf & "There may be additional errors beyond the ones above."
+                                            Exit While
+                                        End If
                                     End If
                                     If requiredFidsForImport.Contains(fids(i)) Then
                                         If val = "" Then
-                                            requiredFieldsErrors &= vbCrLf & "line " & fileLineCounter + 1 & " has a blank value mapped to required field " & fieldLabels(i)
+                                            requiredFieldsErrors &= vbCrLf & "line " & fileLineCounter + 1 & " has a blank value mapped To required field " & fieldLabels(i)
                                             If requiredFieldsErrors.Length > 1000 Then
+                                                requiredFieldsErrors &= vbCrLf & "There may be additional errors beyond the ones above."
                                                 Exit While
                                             End If
                                         End If
@@ -231,145 +258,391 @@ Public Class frmRestore
                                             uniqueFieldValues.Add(fids(i), New HashSet(Of String))
                                         End If
                                         If uniqueFieldValues(fids(i)).contains(val) Then
-                                            uniqueFieldErrors &= vbCrLf & "line " & fileLineCounter + 1 & " has a duplicate value for unique field " & fieldLabels(i)
+                                            uniqueFieldErrors &= vbCrLf & "line " & fileLineCounter + 1 & " has a duplicate value For unique field " & fieldLabels(i)
                                         Else
                                             uniqueFieldValues(fids(i)).add(val)
+                                        End If
+                                        If uniqueFieldErrors.Length > 1000 Then
+                                            uniqueFieldErrors &= vbCrLf & "There may be additional errors beyond the ones above."
+                                            Exit While
                                         End If
                                     End If
                                 ElseIf fids(i) = "3" AndAlso Not rids.Contains(val) Then
                                     If frmErr.rdbSkipRecords.Checked Then
-                                        fileLineCounter += 1
                                         Continue While
                                     Else
                                         val = ""
                                     End If
                                 End If
-                                Dim qdbType As OdbcType = command.Parameters("@fid" & fids(i)).ODBCType
-                                Try
-                                    Select Case qdbType
-                                        Case OdbcType.Int
-                                            command.Parameters("@fid" & fids(i)).Value = Convert.ToInt32(val)
-                                        Case OdbcType.Double, OdbcType.Numeric
-                                            command.Parameters("@fid" & fids(i)).Value = Convert.ToDouble(val)
-                                        Case OdbcType.Date
-                                            command.Parameters("@fid" & fids(i)).Value = Date.Parse(val)
-                                        Case OdbcType.DateTime
-                                            command.Parameters("@fid" & fids(i)).Value = DateTime.Parse(val)
-                                        Case OdbcType.Time
-                                            command.Parameters("@fid" & fids(i)).Value = TimeSpan.Parse(val)
-                                        Case OdbcType.Bit
-                                            If Regex.IsMatch(val, "y|1|c", RegexOptions.IgnoreCase) Then
-                                                command.Parameters("@fid" & fids(i)).Value = True
-                                            Else
-                                                command.Parameters("@fid" & fids(i)).Value = False
-                                            End If
-                                        Case Else
-                                            command.Parameters("@fid" & fids(i)).Value = val
-                                    End Select
-                                Catch ex As Exception
-                                    If checkForErrorsOnly And val <> "" Then
-                                        conversionErrors &= vbCrLf & "line " & fileLineCounter + 1 & " '" & val & "' to " & qdbType.ToString() & " for field " & fieldLabels(i)
-                                        If conversionErrors.Length > 1000 Then
-                                            Exit While
-                                        End If
-                                    End If
-                                    If frmErr.rdbSkipRecords.Checked Then
-                                        fileLineCounter += 1
-                                        Continue While
-                                    End If
-                                    If Not checkForErrorsOnly Then
-                                        Select Case qdbType
-                                            Case OdbcType.Int, OdbcType.Double, OdbcType.Numeric
-                                                Dim nullDouble As Double
-                                                command.Parameters("@fid" & fids(i)).Value = nullDouble
-                                            Case OdbcType.Date
-                                                Dim nulldate As Date
-                                                command.Parameters("@fid" & fids(i)).Value = nulldate
-                                            Case OdbcType.DateTime
-                                                Dim nullDateTime As DateTime
-                                                command.Parameters("@fid" & fids(i)).Value = nullDateTime
-                                            Case OdbcType.Time
-                                                Dim nullTimeSpan As TimeSpan
-                                                command.Parameters("@fid" & fids(i)).Value = nullTimeSpan
-                                            Case OdbcType.Bit
-                                                command.Parameters("@fid" & fids(i)).Value = False
-                                            Case Else
-                                                command.Parameters("@fid" & fids(i)).Value = ""
-                                        End Select
-                                    End If
-                                End Try
+
+                                If setODBCParameter(val, fids(i), fieldLabels(i), command, fileLineCounter, checkForErrorsOnly, conversionErrors) Then
+                                    Exit While
+                                End If
 
                             Next
+                            If previewOnly Then
+                                dtPreview.Rows.Add(drPreview)
+                            End If
                             If Not checkForErrorsOnly Then command.ExecuteNonQuery()
-                            lineCounter += 1
+
                         Catch ex As Exception
                             If checkForErrorsOnly Then
-                                improperlyFormattedLines &= vbCrLf & "line " & fileLineCounter + 1 & " is not a properly formatted CSV line."
+                                improperlyFormattedLines &= vbCrLf & "line " & fileLineCounter + 1 & " Is Not a properly formatted CSV line."
                                 If improperlyFormattedLines.Length > 1000 Then
+                                    improperlyFormattedLines &= vbCrLf & "There may be additional errors beyond the ones above."
                                     Exit While
                                 End If
                             End If
                         End Try
-                        fileLineCounter += 1
+                        lineCounter += 1
                         pb.Value = fileLineCounter Mod 1000
                     End While
                     If Not checkForErrorsOnly Then
                         transaction.Commit()
                         MsgBox("Imported " & lineCounter & " records!", MsgBoxStyle.OkOnly, AppName)
                     Else
-                        If conversionErrors <> "" Or improperlyFormattedLines <> "" Or uniqueFieldErrors <> "" Or requiredFieldsErrors <> "" Or missingRIDs <> "" Then
-                            frmErr.lblMalformed.Text = improperlyFormattedLines
-                            frmErr.lblUnique.Text = uniqueFieldErrors
-                            frmErr.lblRequired.Text = requiredFieldsErrors
-                            frmErr.lblConversions.Text = conversionErrors
-                            frmErr.lblMissing.Text = missingRIDs
-                            If improperlyFormattedLines <> "" Then
-                                frmErr.TabControlErrors.SelectedIndex = 3
-                                frmErr.TabMalformed.Text = "*Malformed lines"
-                            Else
-                                frmErr.TabMalformed.Text = "Malformed lines"
-                            End If
-                            If uniqueFieldErrors <> "" Then
-                                frmErr.TabControlErrors.SelectedIndex = 2
-                                frmErr.TabUnique.Text = "*Unique"
-                            Else
-                                frmErr.TabUnique.Text = "Unique"
-                            End If
-                            If requiredFieldsErrors <> "" Then
-                                frmErr.TabControlErrors.SelectedIndex = 1
-                                frmErr.TabRequired.Text = "*Required"
-                            Else
-                                frmErr.TabRequired.Text = "Required"
-                            End If
-                            If missingRIDs <> "" Then
-                                frmErr.TabControlErrors.SelectedIndex = 0
-                                frmErr.TabMissing.Text = "*Missing Record ID#s"
-                            Else
-                                frmErr.TabMissing.Text = "Missing Record ID#s"
-                            End If
-                            If conversionErrors <> "" Then
-                                frmErr.TabControlErrors.SelectedIndex = 0
-                                frmErr.TabConversions.Text = "*Conversion"
-                            Else
-                                frmErr.TabConversions.Text = "Conversion"
-                            End If
-                            Dim dr As DialogResult = frmErr.ShowDialog()
-                            If frmErr.rdbCancel.Checked Then
-                                restoreTable = False
-                            Else
-                                restoreTable = True
-                            End If
-                        End If
+                        restoreTable = showErrors(previewOnly, conversionErrors, improperlyFormattedLines, uniqueFieldErrors, requiredFieldsErrors, missingRIDs)
+                        pb.Visible = False
                     End If
-                    pb.Visible = False
+                    If previewOnly And restoreTable Then
+                        dsPreview.Tables.Add(dtPreview)
+                        frmPreview.dgPreview.DataSource = dsPreview.Tables(0)
+                        frmPreview.ShowDialog()
+                    End If
                 Catch ex As Exception
-                    pb.Visible = False
-                    MsgBox("Could not import because " & ex.Message)
+                    MsgBox("Could Not import because " & ex.Message)
                     restoreTable = False
+                Finally
+                    lblProgress.Text = ""
+                    pb.Visible = False
                 End Try
             End Using
         End Using
     End Function
+    Private Function getquNectConn(connectionString As String) As OdbcConnection
+
+        Dim quNectConn As OdbcConnection = New OdbcConnection(connectionString)
+        Try
+            quNectConn.Open()
+        Catch excpt As Exception
+            Me.Cursor = Cursors.Default
+            If excpt.Message.StartsWith("Error [IM003]") Or excpt.Message.Contains("Data source name Not found") Then
+                MsgBox("Please install QuNect ODBC For QuickBase from http://qunect.com/download/QuNect.exe and try again.")
+            Else
+                MsgBox(excpt.Message.Substring(13))
+            End If
+            Return Nothing
+            Exit Function
+        End Try
+
+        Dim ver As String = quNectConn.ServerVersion
+        Dim m As Match = Regex.Match(ver, "\d+\.(\d+)\.(\d+)\.(\d+)")
+        qdbVer.year = CInt(m.Groups(1).Value)
+        qdbVer.major = CInt(m.Groups(2).Value)
+        qdbVer.minor = CInt(m.Groups(3).Value)
+        If (qdbVer.major < 6) Or (qdbVer.major = 6 And qdbVer.minor < 84) Then
+            MsgBox("You are running the " & ver & " version of QuNect ODBC for QuickBase. Please install the latest version from http://qunect.com/download/QuNect.exe")
+            quNectConn.Close()
+            Me.Cursor = Cursors.Default
+            Return Nothing
+            Exit Function
+        End If
+        Return quNectConn
+    End Function
+    Private Function showErrors(previewOnly As Boolean, ByRef conversionErrors As String, ByRef improperlyFormattedLines As String, ByRef uniqueFieldErrors As String, ByRef requiredFieldsErrors As String, ByRef missingRIDs As String) As Boolean
+        If conversionErrors <> "" Or improperlyFormattedLines <> "" Or uniqueFieldErrors <> "" Or requiredFieldsErrors <> "" Or missingRIDs <> "" Then
+            frmErr.lblMalformed.Text = improperlyFormattedLines
+            frmErr.lblUnique.Text = uniqueFieldErrors
+            frmErr.lblRequired.Text = requiredFieldsErrors
+            frmErr.lblConversions.Text = conversionErrors
+            frmErr.lblMissing.Text = missingRIDs
+            If improperlyFormattedLines <> "" Then
+                frmErr.TabControlErrors.SelectedIndex = errorTabs.malformed
+                frmErr.TabMalformed.Text = "*Malformed lines"
+            Else
+                frmErr.TabMalformed.Text = "Malformed lines"
+            End If
+            If uniqueFieldErrors <> "" Then
+                frmErr.TabControlErrors.SelectedIndex = errorTabs.unique
+                frmErr.TabUnique.Text = "*Unique"
+            Else
+                frmErr.TabUnique.Text = "Unique"
+            End If
+            If requiredFieldsErrors <> "" Then
+                frmErr.TabControlErrors.SelectedIndex = errorTabs.required
+                frmErr.TabRequired.Text = "*Required"
+            Else
+                frmErr.TabRequired.Text = "Required"
+            End If
+            If conversionErrors <> "" Then
+                frmErr.TabControlErrors.SelectedIndex = errorTabs.conversions
+                frmErr.TabConversions.Text = "*Conversion"
+            Else
+                frmErr.TabConversions.Text = "Conversion"
+            End If
+            If missingRIDs <> "" Then
+                frmErr.TabControlErrors.SelectedIndex = errorTabs.missing
+                frmErr.TabMissing.Text = "*Missing Record ID#s"
+            Else
+                frmErr.TabMissing.Text = "Missing Record ID#s"
+            End If
+            If previewOnly Then
+                frmErr.pnlButtons.Visible = False
+            Else
+                frmErr.pnlButtons.Visible = True
+            End If
+            Dim diagResult As DialogResult = frmErr.ShowDialog()
+                If frmErr.rdbCancel.Checked Then
+                    Return False
+                Else
+                    Return True
+                End If
+            End If
+            Return True
+    End Function
+    Function setODBCParameter(val As String, fid As String, fieldLabel As String, command As OdbcCommand, ByRef fileLineCounter As Integer, checkForErrorsOnly As Boolean, ByRef conversionErrors As String) As Boolean
+        Dim qdbType As OdbcType = command.Parameters("@fid" & fid).OdbcType
+        Try
+            Select Case qdbType
+                Case OdbcType.Int
+                    command.Parameters("@fid" & fid).Value = Convert.ToInt32(val)
+                Case OdbcType.Double, OdbcType.Numeric
+                    command.Parameters("@fid" & fid).Value = Convert.ToDouble(val)
+                Case OdbcType.Date
+                    command.Parameters("@fid" & fid).Value = Date.Parse(val)
+                Case OdbcType.DateTime
+                    command.Parameters("@fid" & fid).Value = DateTime.Parse(val)
+                Case OdbcType.Time
+                    command.Parameters("@fid" & fid).Value = TimeSpan.Parse(val)
+                Case OdbcType.Bit
+                    Dim match As Match = isBooleanTrue.Match(val)
+                    If match.Success Then
+                        command.Parameters("@fid" & fid).Value = True
+                    Else
+                        command.Parameters("@fid" & fid).Value = False
+                    End If
+                Case Else
+                    command.Parameters("@fid" & fid).Value = val
+            End Select
+        Catch ex As Exception
+            If checkForErrorsOnly And val <> "" Then
+                conversionErrors &= vbCrLf & "line " & fileLineCounter + 1 & " '" & val & "' to " & qdbType.ToString() & " for field " & fieldLabel
+                If conversionErrors.Length > 1000 Then
+                    conversionErrors &= vbCrLf & "There may be additional errors beyond the ones above."
+                    Return True
+                End If
+            End If
+            If frmErr.rdbSkipRecords.Checked Then
+                fileLineCounter += 1
+                Return False
+            End If
+            If Not checkForErrorsOnly Then
+                Select Case qdbType
+                    Case OdbcType.Int, OdbcType.Double, OdbcType.Numeric
+                        Dim nullDouble As Double
+                        command.Parameters("@fid" & fid).Value = nullDouble
+                    Case OdbcType.Date
+                        Dim nulldate As Date
+                        command.Parameters("@fid" & fid).Value = nulldate
+                    Case OdbcType.DateTime
+                        Dim nullDateTime As DateTime
+                        command.Parameters("@fid" & fid).Value = nullDateTime
+                    Case OdbcType.Time
+                        Dim nullTimeSpan As TimeSpan
+                        command.Parameters("@fid" & fid).Value = nullTimeSpan
+                    Case OdbcType.Bit
+                        command.Parameters("@fid" & fid).Value = False
+                    Case Else
+                        command.Parameters("@fid" & fid).Value = ""
+                End Select
+            End If
+        End Try
+        Return False
+    End Function
+    Private Function getODBCTypeFromQuickBaseFieldNode(fieldNode As fieldStruct) As OdbcType
+        Select Case fieldNode.base_type
+            Case "text"
+                Return OdbcType.VarChar
+            Case "float"
+                If fieldNode.decimal_places > 0 Then
+                    Return OdbcType.Numeric
+                Else
+                    Return OdbcType.Double
+                End If
+
+            Case "bool"
+                Return OdbcType.Bit
+            Case "int32"
+                Return OdbcType.Int
+            Case "int64"
+                Select Case fieldNode.type
+                    Case "timestamp"
+                        Return OdbcType.DateTime
+                    Case "timeofday"
+                        Return OdbcType.Time
+                    Case "duration"
+                        Return OdbcType.Double
+                    Case Else
+                        Return OdbcType.Date
+                End Select
+            Case Else
+                Return OdbcType.VarChar
+        End Select
+        Return OdbcType.VarChar
+    End Function
+
+    Private Function skipThisRow(op As String, cellValue As String, criteria As String, fieldType As String) As Boolean
+        If op = "is null" AndAlso cellValue = "" Then
+            Return False
+        ElseIf op = "is null" AndAlso cellValue <> "" Then
+            Return True
+        ElseIf op = "is not null" AndAlso cellValue <> "" Then
+            Return False
+        ElseIf op = "is not null" AndAlso cellValue = "" Then
+            Return True
+        End If
+        Dim compareResult As comparisonResult = compare(cellValue, criteria, fieldType)
+        If compareResult = comparisonResult.null Then
+            Return True
+        End If
+        Select Case op
+            Case "equals"
+                If compareResult <> comparisonResult.equal Then
+                    Return True
+                End If
+            Case "does not equal"
+                If compareResult = comparisonResult.equal Then
+                    Return True
+                End If
+            Case "greater than or equal"
+                If compareResult = comparisonResult.less Then
+                    Return True
+                End If
+            Case "greater than"
+                If compareResult <> comparisonResult.greater Then
+                    Return True
+                End If
+            Case "less than or equal"
+                If compareResult = comparisonResult.greater Then
+                    Return True
+                End If
+            Case "less than"
+                If compareResult <> comparisonResult.less Then
+                    Return True
+                End If
+            Case "contains"
+                If Not cellValue.Contains(criteria) Then
+                    Return True
+                End If
+            Case "starts with"
+                If Not cellValue.StartsWith(criteria) Then
+                    Return True
+                End If
+            Case "does not contain"
+                If cellValue.Contains(criteria) Then
+                    Return True
+                End If
+            Case "does not start with"
+                If cellValue.StartsWith(criteria) Then
+                    Return True
+                End If
+            Case Else
+                Return False
+        End Select
+        Return False
+    End Function
+
+    Private Function compare(leftStr As String, rightStr As String, fieldType As String) As comparisonResult
+        Dim rightVar As Object = 0
+        Dim leftVar As Object = 0
+        Try
+            Select Case fieldType
+                Case "Date"
+                    rightVar = Date.Parse(rightStr)
+                    leftVar = Date.Parse(leftStr)
+                    If leftVar = rightVar Then
+                        Return comparisonResult.equal
+                    ElseIf Date.Compare(leftVar, rightVar) > 0 Then
+                        Return comparisonResult.greater
+                    Else
+                        Return comparisonResult.less
+                    End If
+                Case "timestamp"
+                    rightVar = DateTime.Parse(rightStr)
+                    leftVar = DateTime.Parse(leftStr)
+                    If leftVar = rightVar Then
+                        Return comparisonResult.equal
+                    ElseIf DateTime.Compare(leftVar, rightVar) > 0 Then
+                        Return comparisonResult.greater
+                    Else
+                        Return comparisonResult.less
+                    End If
+                Case "float", "currency"
+                    rightVar = Convert.ToDouble(rightStr)
+                    leftVar = Convert.ToDouble(leftStr)
+                    If leftVar = rightVar Then
+                        Return comparisonResult.equal
+                    ElseIf leftVar > rightVar Then
+                        Return comparisonResult.greater
+                    Else
+                        Return comparisonResult.less
+                    End If
+                Case "recordid"
+                    rightVar = Convert.ToInt32(rightStr)
+                    leftVar = Convert.ToInt32(leftStr)
+                    If leftVar = rightVar Then
+                        Return comparisonResult.equal
+                    ElseIf leftVar > rightVar Then
+                        Return comparisonResult.greater
+                    Else
+                        Return comparisonResult.less
+                    End If
+                Case "checkbox"
+                    Dim match As Match = isBooleanTrue.Match(leftStr)
+                    If match.Success Then
+                        leftVar = True
+                    Else
+                        leftVar = False
+                    End If
+                    match = isBooleanTrue.Match(rightStr)
+                    If match.Success Then
+                        rightVar = True
+                    Else
+                        rightVar = False
+                    End If
+                    If leftVar = rightVar Then
+                        Return comparisonResult.equal
+                    Else
+                        Return comparisonResult.notEqual
+                    End If
+                    'need to deal with duration and timeofday
+                Case "duration", "timeofday"
+                    Dim tsLeft As TimeSpan
+                    Dim tsRight As TimeSpan
+                    If TimeSpan.TryParse(rightStr, tsRight) Then
+                        tsLeft = TimeSpan.FromMilliseconds(Convert.ToDouble(leftStr))
+                    Else
+                        Return comparisonResult.null
+                    End If
+                    If tsLeft = tsRight Then
+                        Return comparisonResult.equal
+                    ElseIf tsLeft > tsRight Then
+                        Return comparisonResult.greater
+                    Else
+                        Return comparisonResult.less
+                    End If
+                Case Else
+                    If leftStr <> rightStr Then
+                        Return comparisonResult.notEqual
+                    Else
+                        Return comparisonResult.equal
+                    End If
+            End Select
+        Catch ex As Exception
+            Return comparisonResult.null
+        End Try
+    End Function
+
     Private Sub txtUsername_TextChanged(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles txtUsername.TextChanged
         SaveSetting(AppName, "Credentials", "username", txtUsername.Text)
     End Sub
@@ -383,12 +656,20 @@ Public Class frmRestore
 
     Private Sub OpenSourceFile_FileOk(sender As Object, e As System.ComponentModel.CancelEventArgs) Handles OpenSourceFile.FileOk
         lblFile.Text = OpenSourceFile.FileName.ToString()
+        hideButtons()
+    End Sub
+    Private Sub hideButtons()
+        btnPreview.Visible = False
+        btnImport.Visible = False
+        dgCriteria.Visible = False
+        dgMapping.Visible = False
     End Sub
     Private Sub btnListTables_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles btnListTables.Click
         listTables()
     End Sub
     Private Sub listTables()
         Me.Cursor = Cursors.WaitCursor
+
         qdb.setServer(txtServer.Text, True)
         qdb.setAppToken(txtAppToken.Text)
         qdb.Authenticate(txtUsername.Text, txtPassword.Text)
@@ -402,7 +683,7 @@ Public Class frmRestore
     End Sub
     Sub timeoutCallback(ByVal result As System.IAsyncResult)
         Me.Cursor = Cursors.Default
-        MsgBox("Operation timed out. Please try again.")
+        MsgBox("Operation timed out. Please Try again.")
     End Sub
     Sub listTablesCallback(ByVal result As System.IAsyncResult)
         Dim tableXML As XmlDocument
@@ -450,69 +731,128 @@ Public Class frmRestore
         frmTableChooser.Show()
         Me.Cursor = Cursors.Default
     End Sub
-    Sub schemaCallback(ByVal result As System.IAsyncResult)
+    Sub listFields(dbid As String)
+        sourceLabelToFieldType = New Dictionary(Of String, String)
+        destinationLabelsToFids = New Dictionary(Of String, String)
+        Dim fidToLabel As New Dictionary(Of String, String)
+        fieldNodes = New Dictionary(Of String, fieldStruct)
+        sourceFieldNames.Clear()
+        Dim connectionString As String = "Driver={QuNect ODBC for QuickBase};uid=" & txtUsername.Text & ";pwd=" & txtPassword.Text & ";QUICKBASESERVER=" & txtServer.Text & ";APPTOKEN=" & txtAppToken.Text
         Try
-            Dim requestState As QuickBaseClient.WebRequestState = CType(result.AsyncState, QuickBaseClient.WebRequestState)
-            schemaXML = requestState.xmlDoc
-            fieldNodes = schemaXML.SelectNodes("/*/table/fields/field[(not(@mode) and not(@role)) or @id=3]")
-
-
-            Dim fidReader As New Microsoft.VisualBasic.FileIO.TextFieldParser(Regex.Replace(lblFile.Text, "csv$", "fids"))
-
-
-            fidReader.TextFieldType = Microsoft.VisualBasic.FileIO.FieldType.Delimited
-            fidReader.Delimiters = New String() {"."}
-            clist = fidReader.ReadFields()
-
-            'here we need to open the csv and get the field names
-            Dim csvReader As New Microsoft.VisualBasic.FileIO.TextFieldParser(lblFile.Text)
-            csvReader.TextFieldType = Microsoft.VisualBasic.FileIO.FieldType.Delimited
-            csvReader.Delimiters = New String() {","}
             Dim currentRow As String()
-            'Loop through all of the fields in the schema.
-            DirectCast(dgMapping.Columns(3), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Clear()
-            DirectCast(dgMapping.Columns(3), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Add("Do not import")
-            For i As Integer = 0 To fieldNodes.Count - 1
-                DirectCast(dgMapping.Columns(3), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Add(fieldNodes(i).SelectSingleNode("label").InnerText)
-            Next
-            If Not csvReader.EndOfData Then
-                Try
-                    currentRow = csvReader.ReadFields()
-                    dgMapping.Rows.Clear()
-                    For i As Integer = 0 To currentRow.Length - 1
-                        If currentRow(i) = "" Then Continue For
-                        Dim j As Integer = dgMapping.Rows.Add(New String() {currentRow(i)})
-                        DirectCast(dgMapping.Rows(j).Cells(1), System.Windows.Forms.DataGridViewComboBoxCell).Value = "has any value"
-                        'DirectCast(dgMapping.Rows(j).Cells(3), System.Windows.Forms.DataGridViewComboBoxCell).Value = "Do not import"
-                        'now we have to see if we can match this to a field in the table
-                        If clist.Length > i + 1 Then
-                            For k As Integer = 0 To fieldNodes.Count - 1
-                                If fieldNodes(k).SelectSingleNode("@id").InnerText = clist(i) Then
-                                    DirectCast(dgMapping.Rows(j).Cells(3), System.Windows.Forms.DataGridViewComboBoxCell).Value = fieldNodes(k).SelectSingleNode("label").InnerText
-                                    Exit For
-                                End If
-                            Next
-                        Else
-                            For k As Integer = 0 To fieldNodes.Count - 1
-                                If fieldNodes(k).SelectSingleNode("label").InnerText = currentRow(i) Then
-                                    DirectCast(dgMapping.Rows(j).Cells(3), System.Windows.Forms.DataGridViewComboBoxCell).Value = currentRow(i)
-                                    Exit For
-                                End If
-                            Next
-                        End If
-                    Next
+            Using connection As OdbcConnection = getquNectConn(connectionString)
+                If connection Is Nothing Then Exit Sub
+                Dim strSQL As String = "SELECT label, fid, field_type, parentFieldID, ""unique"", required, ""key"", base_type, decimal_places  FROM """ & dbid & "~fields"" WHERE (mode = '' and role = '') or fid = '3'"
 
-                Catch ex As Microsoft.VisualBasic.FileIO.MalformedLineException
-                    MsgBox("First line of file is malformed, cannot display field names.")
+                Dim quNectCmd As OdbcCommand = New OdbcCommand(strSQL, connection)
+                Dim dr As OdbcDataReader
+                Try
+                    dr = quNectCmd.ExecuteReader()
+                Catch excpt As Exception
+                    quNectCmd.Dispose()
+                    Exit Sub
                 End Try
-            End If
+                If Not dr.HasRows Then
+                    Exit Sub
+                End If
+                Dim fidReader As New Microsoft.VisualBasic.FileIO.TextFieldParser(Regex.Replace(lblFile.Text, "csv$", "fids"))
+                fidReader.TextFieldType = Microsoft.VisualBasic.FileIO.FieldType.Delimited
+                fidReader.Delimiters = New String() {"."}
+                clist = fidReader.ReadFields()
+                If Not fidReader.EndOfData Then
+                    fieldTypes = fidReader.ReadFields()
+                Else
+                    fieldTypes = Nothing
+                End If
+                'here we need to open the csv and get the field names
+                Dim csvReader As New Microsoft.VisualBasic.FileIO.TextFieldParser(lblFile.Text)
+                csvReader.TextFieldType = Microsoft.VisualBasic.FileIO.FieldType.Delimited
+                csvReader.Delimiters = New String() {","}
+                csvReader.HasFieldsEnclosedInQuotes = True
+                'Loop through all of the fields in the schema.
+                DirectCast(dgMapping.Columns(mapping.destination), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Clear()
+                DirectCast(dgCriteria.Columns(filter.source), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Clear()
+                DirectCast(dgMapping.Columns(mapping.destination), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Add("Do not import")
+                While (dr.Read())
+                    Dim field As New fieldStruct
+                    field.label = dr.GetString(0)
+                    field.fid = dr.GetString(1)
+                    field.type = dr.GetString(2)
+                    field.parentFieldID = dr.GetString(3)
+                    field.unique = dr.GetBoolean(4)
+                    field.required = dr.GetBoolean(5)
+                    fidToLabel.Add(field.fid, field.label)
+                    If field.parentFieldID <> "" Then
+                        field.label = fidToLabel(field.parentFieldID) & ": " & field.label
+                    End If
+                    If dr.GetBoolean(6) Then
+                        keyfid = field.fid
+                    End If
+                    field.base_type = dr.GetString(7)
+                    field.decimal_places = 0
+                    If Not IsDBNull(dr(8)) Then
+                        field.decimal_places = dr.GetInt32(8)
+                    End If
+                    fieldNodes.Add(field.fid, field)
+                    destinationLabelsToFids.Add(field.label, field.fid)
+                    DirectCast(dgMapping.Columns(mapping.destination), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Add(field.label)
+                End While
+                quNectCmd.Dispose()
+                If Not csvReader.EndOfData Then
+                    Try
+                        currentRow = csvReader.ReadFields()
+                        dgMapping.Rows.Clear()
+                        For i As Integer = 0 To currentRow.Length - 1
+                            Dim sourceFieldName As String = currentRow(i)
+                            If sourceFieldName = "" Then
+                                Exit For
+                            End If
+                            If fieldTypes.Length = currentRow.Length - 1 Then
+                                sourceLabelToFieldType.Add(sourceFieldName, fieldTypes(i))
+                            ElseIf fieldNodes.ContainsKey(clist(i)) Then
+                                sourceLabelToFieldType.Add(sourceFieldName, fieldNodes(clist(i)).type)
+                            End If
+                            If sourceFieldName = "" Then Continue For
+                            Dim j As Integer = dgMapping.Rows.Add(New String() {sourceFieldName})
+                            sourceFieldNames.Add(sourceFieldName, i)
+                            DirectCast(dgCriteria.Columns(filter.source), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Add(sourceFieldName)
+                            'DirectCast(dgCriteria.Rows(j).Cells(filter.booleanOperator), System.Windows.Forms.DataGridViewComboBoxCell).Value = "has any value"
+                            'now we have to see if we can match this to a field in the table
+                            'DirectCast(dgMapping.Rows(j).Cells(mapping.destination), System.Windows.Forms.DataGridViewComboBoxCell).Value = "Do not import"
+                            If clist.Length > i Then
+                                For Each field As KeyValuePair(Of String, fieldStruct) In fieldNodes
+                                    If field.Key = clist(i) AndAlso field.Value.type <> "address" Then
+                                        DirectCast(dgMapping.Rows(j).Cells(mapping.destination), System.Windows.Forms.DataGridViewComboBoxCell).Value = field.Value.label
+                                        Exit For
+                                    End If
+                                Next
+                            Else
+                                For Each field As KeyValuePair(Of String, fieldStruct) In fieldNodes
+                                    If field.Value.label = sourceFieldName AndAlso field.Value.type <> "address" Then
+                                        DirectCast(dgMapping.Rows(j).Cells(mapping.destination), System.Windows.Forms.DataGridViewComboBoxCell).Value = sourceFieldName
+                                        Exit For
+                                    End If
+                                Next
+                            End If
+                        Next
+
+                    Catch ex As Microsoft.VisualBasic.FileIO.MalformedLineException
+                        MsgBox("First line of file is malformed, cannot display field names.")
+
+                    End Try
+                End If
+            End Using
+
             btnImport.Visible = True
+            btnPreview.Visible = True
+            dgMapping.Visible = True
+            dgCriteria.Visible = True
             Me.Cursor = Cursors.Default
         Catch ex As Exception
             MsgBox(ex.Message)
         End Try
-    End Sub
 
+    End Sub
     Private Sub txtServer_TextChanged(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles txtServer.TextChanged
         SaveSetting(AppName, "Credentials", "server", txtServer.Text)
     End Sub
@@ -530,8 +870,6 @@ Public Class frmRestore
             SaveSetting(AppName, "config", "firstrowhasheaders", "0")
         End If
     End Sub
-
-
     Private Sub restore_Load(sender As Object, e As EventArgs) Handles Me.Load
         Me.Text = "QuNect Restore 1.0.0.1"
         txtUsername.Text = GetSetting(AppName, "Credentials", "username")
@@ -557,15 +895,17 @@ Public Class frmRestore
         qdb.proxyAuthenticateEx(True)
 
         Dim myBuildInfo As FileVersionInfo = FileVersionInfo.GetVersionInfo(Application.ExecutablePath)
-        Dim ops As String() = New String() {"has any value", "equals", "does not equal", "contains", "does not contain", "starts with", "does not start with"}
+        Dim ops As String() = New String() {"has any value", "equals", "does not equal", "greater than", "greater than or equal", "less than", "less than or equal", "contains", "does not contain", "starts with", "does not start with", "is null", "is not null"}
         For i As Integer = 0 To ops.Count - 1
-            DirectCast(dgMapping.Columns(1), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Add(ops(i))
+            DirectCast(dgCriteria.Columns(filter.booleanOperator), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Add(ops(i))
         Next
+        dgMapping.Visible = False
+        dgCriteria.Visible = False
     End Sub
 
     Private Sub btnImport_Click(sender As Object, e As EventArgs) Handles btnImport.Click
-        If restoreTable(True) Then
-            restoreTable(False)
+        If restoreTable(True, False) Then
+            restoreTable(False, False)
         End If
     End Sub
 
@@ -579,10 +919,11 @@ Public Class frmRestore
             Me.Cursor = Cursors.Default
             Exit Sub
         End If
-        qdb.setServer(txtServer.Text, True)
-        qdb.setAppToken(txtAppToken.Text)
-        qdb.Authenticate(txtUsername.Text, txtPassword.Text)
-        qdb.GetSchema(lblTable.Text, New AsyncCallback(AddressOf schemaCallback), New AsyncCallback(AddressOf timeoutCallback))
+        'qdb.setServer(txtServer.Text, True)
+        'qdb.setAppToken(txtAppToken.Text)
+        'qdb.Authenticate(txtUsername.Text, txtPassword.Text)
+        'qdb.GetSchema(lblTable.Text, New AsyncCallback(AddressOf schemaCallback), New AsyncCallback(AddressOf timeoutCallback))
+        listFields(lblTable.Text)
     End Sub
 
 
@@ -599,10 +940,71 @@ Public Class frmRestore
         btnImport.Visible = False
     End Sub
 
-    Private Sub cmbAttachments_SelectedIndexChanged(sender As Object, e As EventArgs)
+    Private Sub dgCriteria_CellEnter(sender As Object, e As DataGridViewCellEventArgs) Handles dgCriteria.CellEnter
+        dtPicker.Visible = False
+        If e.ColumnIndex <> filter.criteria Then
+            dtPicker.Visible = False
+            Exit Sub
+        End If
+        Dim label As String = sender.rows.item(e.RowIndex).cells.item(filter.source).value
+        If label Is Nothing Then Exit Sub
+        If sourceLabelToFieldType.ContainsKey(label) Then
+            Dim field_type As String = sourceLabelToFieldType(label)
+            If field_type = "date" Or field_type = "timestamp" Then
+                'launch the date picker
+                dtPicker.Top = ((DirectCast(e, DataGridViewCellEventArgs).RowIndex + 1) * dgCriteria.Rows(0).Height) + dgCriteria.Top
+                dtPicker.Left = 43 + dgCriteria.Columns(filter.source).Width + dgCriteria.Columns(filter.criteria).Width + dgCriteria.Left
+                dtPicker.Visible = True
+                dtPicker.Tag = e.RowIndex
+                dtPicker.BringToFront()
+            End If
+        End If
+    End Sub
 
+
+
+    Private Sub dtPicker_ValueChanged(sender As Object, e As EventArgs) Handles dtPicker.ValueChanged
+        dgCriteria.Rows.Item(dtPicker.Tag).Cells.Item(filter.criteria).Value = dtPicker.Value
+    End Sub
+
+    Private Sub dgCriteria_CellValueChanged(sender As Object, e As DataGridViewCellEventArgs) Handles dgCriteria.CellValueChanged
+        If e.RowIndex < 0 Then Exit Sub
+        If Not dgCriteria.Rows(e.RowIndex).Cells(filter.source).Value Is Nothing Then
+            Select Case sourceLabelToFieldType(dgCriteria.Rows(e.RowIndex).Cells(filter.source).Value)
+                Case "duration"
+                    With dgCriteria.Rows(e.RowIndex).Cells(filter.criteria)
+                        .ToolTipText = "Enter durations as Days.HH:MM:SS"
+                    End With
+                Case "checkbox"
+                    With dgCriteria.Rows(e.RowIndex).Cells(filter.criteria)
+                        .ToolTipText = "yes, 1, true means checked otherwise unchecked"
+                    End With
+            End Select
+        End If
+    End Sub
+
+    Private Sub dgCriteria_CellMouseEnter(sender As Object, e As DataGridViewCellEventArgs) Handles dgCriteria.CellMouseEnter
+        If e.RowIndex < 0 Then Exit Sub
+        If Not dgCriteria.Rows(e.RowIndex).Cells(filter.source).Value Is Nothing AndAlso sourceLabelToFieldType.ContainsKey(dgCriteria.Rows(e.RowIndex).Cells(filter.source).Value) Then
+            Select Case sourceLabelToFieldType(dgCriteria.Rows(e.RowIndex).Cells(filter.source).Value)
+                Case "duration"
+                    With dgCriteria.Rows(e.RowIndex).Cells(filter.criteria)
+                        .ToolTipText = "Enter durations as Days.HH:MM:SS"
+                    End With
+                Case "checkbox"
+                    With dgCriteria.Rows(e.RowIndex).Cells(filter.criteria)
+                        .ToolTipText = "yes, 1, true means checked otherwise unchecked"
+                    End With
+            End Select
+        End If
+    End Sub
+
+    Private Sub btnPreview_Click(sender As Object, e As EventArgs) Handles btnPreview.Click
+        restoreTable(True, True)
     End Sub
 End Class
+
+
 Public Class QuickBaseClient
 
     Private Password As String
@@ -736,6 +1138,7 @@ Public Class QuickBaseClient
         Dim CSVReader As New Microsoft.VisualBasic.FileIO.TextFieldParser(CSVStream)
         CSVReader.TextFieldType = Microsoft.VisualBasic.FileIO.FieldType.Delimited
         CSVReader.Delimiters = New String() {","}
+        CSVReader.HasFieldsEnclosedInQuotes = True
         Dim currentRow As String()
         If Not CSVReader.EndOfData Then currentRow = CSVReader.ReadFields()
         getHashSetofFieldValues = New HashSet(Of String)
@@ -910,7 +1313,7 @@ Public Class QuickBaseClient
 
             'create a fileStream instance to pass to BinaryWriter object
             Dim fsWrite As FileStream
-            fsWrite = New FileStream(Path:=fileName, _
+            fsWrite = New FileStream(path:=fileName,
                 mode:=FileMode.CreateNew, access:=FileAccess.Write)
 
             'create binary writer instance
@@ -922,10 +1325,6 @@ Public Class QuickBaseClient
 
             'close the writer 
             bWrite.Close()
-
-            fsWrite.Close()
-
-
             HTTPPost = fileName
         End If
 
@@ -1068,6 +1467,7 @@ Public Class QuickBaseClient
     End Function
     Private Function int64toDateCommon(ByVal int64 As String) As Double
         If int64 = "" Then
+            Return 0
             Exit Function
         End If
         Dim dblTemp As Double
@@ -1077,8 +1477,9 @@ Public Class QuickBaseClient
         ElseIf dblTemp > 255611376000000.0# Then
             dblTemp = 255611376000000.0#
         Else
-            int64toDateCommon = (dblTemp / MILLISECONDS_IN_A_DAY)
+            dblTemp = (dblTemp / MILLISECONDS_IN_A_DAY)
         End If
+        Return dblTemp
     End Function
 
     Function int64ToDuration(ByVal int64 As String) As Date
@@ -1189,10 +1590,10 @@ Public Class QuickBaseClient
         makeValidFilename = ""
         For i = 1 To Len(strString)
             byteChar = Mid(strString, i, 1)
-            If byteChar = "\" Or byteChar = "/" Or _
-               byteChar = ":" Or byteChar = "*" Or _
-               Asc(byteChar) = 63 Or byteChar = """" Or _
-               byteChar = "<" Or byteChar = ">" Or _
+            If byteChar = "\" Or byteChar = "/" Or
+               byteChar = ":" Or byteChar = "*" Or
+               Asc(byteChar) = 63 Or byteChar = """" Or
+               byteChar = "<" Or byteChar = ">" Or
                byteChar = "|" Or byteChar = "'" _
             Then
                 makeValidFilename = makeValidFilename & "_"

@@ -23,6 +23,8 @@ Partial Class frmRestore
     <System.Diagnostics.DebuggerStepThrough()> _
     Private Sub InitializeComponent()
         Me.dgMapping = New System.Windows.Forms.DataGridView()
+        Me.Source = New System.Windows.Forms.DataGridViewTextBoxColumn()
+        Me.Destination = New System.Windows.Forms.DataGridViewComboBoxColumn()
         Me.OpenSourceFile = New System.Windows.Forms.OpenFileDialog()
         Me.btnSource = New System.Windows.Forms.Button()
         Me.btnImport = New System.Windows.Forms.Button()
@@ -41,11 +43,16 @@ Partial Class frmRestore
         Me.ckbDetectProxy = New System.Windows.Forms.CheckBox()
         Me.btnListFields = New System.Windows.Forms.Button()
         Me.chkBxHeaders = New System.Windows.Forms.CheckBox()
-        Me.Source = New System.Windows.Forms.DataGridViewTextBoxColumn()
-        Me.op = New System.Windows.Forms.DataGridViewComboBoxColumn()
-        Me.criteria = New System.Windows.Forms.DataGridViewTextBoxColumn()
-        Me.Destination = New System.Windows.Forms.DataGridViewComboBoxColumn()
+        Me.dtPicker = New System.Windows.Forms.DateTimePicker()
+        Me.dgCriteria = New System.Windows.Forms.DataGridView()
+        Me.cmbCriteria = New System.Windows.Forms.DataGridViewComboBoxColumn()
+        Me.cmbOperator = New System.Windows.Forms.DataGridViewComboBoxColumn()
+        Me.DataGridViewTextBoxColumn2 = New System.Windows.Forms.DataGridViewTextBoxColumn()
+        Me.btnPreview = New System.Windows.Forms.Button()
+        Me.lblProgress = New System.Windows.Forms.Label()
+        Me.lblMode = New System.Windows.Forms.Label()
         CType(Me.dgMapping, System.ComponentModel.ISupportInitialize).BeginInit()
+        CType(Me.dgCriteria, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.SuspendLayout()
         '
         'dgMapping
@@ -53,11 +60,24 @@ Partial Class frmRestore
         Me.dgMapping.AllowUserToAddRows = False
         Me.dgMapping.AllowUserToDeleteRows = False
         Me.dgMapping.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize
-        Me.dgMapping.Columns.AddRange(New System.Windows.Forms.DataGridViewColumn() {Me.Source, Me.op, Me.criteria, Me.Destination})
-        Me.dgMapping.Location = New System.Drawing.Point(12, 230)
+        Me.dgMapping.Columns.AddRange(New System.Windows.Forms.DataGridViewColumn() {Me.Source, Me.Destination})
+        Me.dgMapping.Location = New System.Drawing.Point(662, 230)
         Me.dgMapping.Name = "dgMapping"
-        Me.dgMapping.Size = New System.Drawing.Size(871, 672)
+        Me.dgMapping.Size = New System.Drawing.Size(445, 682)
         Me.dgMapping.TabIndex = 0
+        '
+        'Source
+        '
+        Me.Source.HeaderText = "Source"
+        Me.Source.Name = "Source"
+        Me.Source.ReadOnly = True
+        Me.Source.Width = 200
+        '
+        'Destination
+        '
+        Me.Destination.HeaderText = "Destination"
+        Me.Destination.Name = "Destination"
+        Me.Destination.Width = 200
         '
         'OpenSourceFile
         '
@@ -74,11 +94,11 @@ Partial Class frmRestore
         '
         'btnImport
         '
-        Me.btnImport.Location = New System.Drawing.Point(806, 174)
+        Me.btnImport.Location = New System.Drawing.Point(921, 176)
         Me.btnImport.Name = "btnImport"
-        Me.btnImport.Size = New System.Drawing.Size(77, 27)
+        Me.btnImport.Size = New System.Drawing.Size(185, 27)
         Me.btnImport.TabIndex = 3
-        Me.btnImport.Text = "Import"
+        Me.btnImport.Text = "Import from the CSV backup file"
         Me.btnImport.UseVisualStyleBackColor = True
         '
         'btnListTables
@@ -192,7 +212,7 @@ Partial Class frmRestore
         '
         'btnListFields
         '
-        Me.btnListFields.Location = New System.Drawing.Point(718, 174)
+        Me.btnListFields.Location = New System.Drawing.Point(606, 176)
         Me.btnListFields.Name = "btnListFields"
         Me.btnListFields.Size = New System.Drawing.Size(82, 27)
         Me.btnListFields.TabIndex = 37
@@ -209,36 +229,79 @@ Partial Class frmRestore
         Me.chkBxHeaders.Text = "First row has field labels"
         Me.chkBxHeaders.UseVisualStyleBackColor = True
         '
-        'Source
+        'dtPicker
         '
-        Me.Source.HeaderText = "Source"
-        Me.Source.Name = "Source"
-        Me.Source.ReadOnly = True
-        Me.Source.Width = 200
+        Me.dtPicker.Location = New System.Drawing.Point(286, 83)
+        Me.dtPicker.Name = "dtPicker"
+        Me.dtPicker.Size = New System.Drawing.Size(200, 20)
+        Me.dtPicker.TabIndex = 39
+        Me.dtPicker.Visible = False
         '
-        'op
+        'dgCriteria
         '
-        Me.op.HeaderText = "Import Condition"
-        Me.op.Name = "op"
-        Me.op.Width = 200
+        Me.dgCriteria.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize
+        Me.dgCriteria.Columns.AddRange(New System.Windows.Forms.DataGridViewColumn() {Me.cmbCriteria, Me.cmbOperator, Me.DataGridViewTextBoxColumn2})
+        Me.dgCriteria.Location = New System.Drawing.Point(12, 230)
+        Me.dgCriteria.Name = "dgCriteria"
+        Me.dgCriteria.Size = New System.Drawing.Size(644, 682)
+        Me.dgCriteria.TabIndex = 40
         '
-        'criteria
+        'cmbCriteria
         '
-        Me.criteria.HeaderText = "Criteria"
-        Me.criteria.Name = "criteria"
-        Me.criteria.Width = 200
+        Me.cmbCriteria.HeaderText = "Source"
+        Me.cmbCriteria.Name = "cmbCriteria"
+        Me.cmbCriteria.Resizable = System.Windows.Forms.DataGridViewTriState.[True]
+        Me.cmbCriteria.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.Automatic
+        Me.cmbCriteria.Width = 200
         '
-        'Destination
+        'cmbOperator
         '
-        Me.Destination.HeaderText = "Destination"
-        Me.Destination.Name = "Destination"
-        Me.Destination.Width = 200
+        Me.cmbOperator.HeaderText = "Import Condition"
+        Me.cmbOperator.Name = "cmbOperator"
+        Me.cmbOperator.Width = 200
+        '
+        'DataGridViewTextBoxColumn2
+        '
+        Me.DataGridViewTextBoxColumn2.HeaderText = "Criteria"
+        Me.DataGridViewTextBoxColumn2.Name = "DataGridViewTextBoxColumn2"
+        Me.DataGridViewTextBoxColumn2.Width = 200
+        '
+        'btnPreview
+        '
+        Me.btnPreview.Location = New System.Drawing.Point(694, 176)
+        Me.btnPreview.Name = "btnPreview"
+        Me.btnPreview.Size = New System.Drawing.Size(221, 27)
+        Me.btnPreview.TabIndex = 41
+        Me.btnPreview.Text = "Preview which rows will be inported"
+        Me.btnPreview.UseVisualStyleBackColor = True
+        Me.btnPreview.Visible = False
+        '
+        'lblProgress
+        '
+        Me.lblProgress.AutoSize = True
+        Me.lblProgress.Location = New System.Drawing.Point(587, 116)
+        Me.lblProgress.Name = "lblProgress"
+        Me.lblProgress.Size = New System.Drawing.Size(0, 13)
+        Me.lblProgress.TabIndex = 42
+        '
+        'lblMode
+        '
+        Me.lblMode.AutoSize = True
+        Me.lblMode.Location = New System.Drawing.Point(588, 152)
+        Me.lblMode.Name = "lblMode"
+        Me.lblMode.Size = New System.Drawing.Size(0, 13)
+        Me.lblMode.TabIndex = 43
         '
         'frmRestore
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
-        Me.ClientSize = New System.Drawing.Size(895, 924)
+        Me.ClientSize = New System.Drawing.Size(1128, 924)
+        Me.Controls.Add(Me.lblMode)
+        Me.Controls.Add(Me.lblProgress)
+        Me.Controls.Add(Me.btnPreview)
+        Me.Controls.Add(Me.dgCriteria)
+        Me.Controls.Add(Me.dtPicker)
         Me.Controls.Add(Me.chkBxHeaders)
         Me.Controls.Add(Me.btnListFields)
         Me.Controls.Add(Me.ckbDetectProxy)
@@ -260,6 +323,7 @@ Partial Class frmRestore
         Me.Name = "frmRestore"
         Me.Text = "QuNect Restore"
         CType(Me.dgMapping, System.ComponentModel.ISupportInitialize).EndInit()
+        CType(Me.dgCriteria, System.ComponentModel.ISupportInitialize).EndInit()
         Me.ResumeLayout(False)
         Me.PerformLayout()
 
@@ -283,9 +347,14 @@ Partial Class frmRestore
     Friend WithEvents ckbDetectProxy As System.Windows.Forms.CheckBox
     Friend WithEvents btnListFields As System.Windows.Forms.Button
     Friend WithEvents chkBxHeaders As System.Windows.Forms.CheckBox
-    Friend WithEvents Source As System.Windows.Forms.DataGridViewTextBoxColumn
-    Friend WithEvents op As System.Windows.Forms.DataGridViewComboBoxColumn
-    Friend WithEvents criteria As System.Windows.Forms.DataGridViewTextBoxColumn
-    Friend WithEvents Destination As System.Windows.Forms.DataGridViewComboBoxColumn
-
+    Friend WithEvents dtPicker As DateTimePicker
+    Friend WithEvents dgCriteria As DataGridView
+    Friend WithEvents Source As DataGridViewTextBoxColumn
+    Friend WithEvents Destination As DataGridViewComboBoxColumn
+    Friend WithEvents cmbCriteria As DataGridViewComboBoxColumn
+    Friend WithEvents cmbOperator As DataGridViewComboBoxColumn
+    Friend WithEvents DataGridViewTextBoxColumn2 As DataGridViewTextBoxColumn
+    Friend WithEvents btnPreview As Button
+    Friend WithEvents lblProgress As Label
+    Friend WithEvents lblMode As Label
 End Class

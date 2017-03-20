@@ -27,6 +27,8 @@ Partial Class frmErr
         Me.rdbCancel = New System.Windows.Forms.RadioButton()
         Me.btnOK = New System.Windows.Forms.Button()
         Me.TabControlErrors = New System.Windows.Forms.TabControl()
+        Me.TabMissing = New System.Windows.Forms.TabPage()
+        Me.lblMissing = New System.Windows.Forms.Label()
         Me.TabConversions = New System.Windows.Forms.TabPage()
         Me.lblConversions = New System.Windows.Forms.Label()
         Me.TabRequired = New System.Windows.Forms.TabPage()
@@ -36,21 +38,19 @@ Partial Class frmErr
         Me.TabMalformed = New System.Windows.Forms.TabPage()
         Me.lblMalformed = New System.Windows.Forms.Label()
         Me.pnlButtons = New System.Windows.Forms.Panel()
-        Me.TabMissing = New System.Windows.Forms.TabPage()
-        Me.lblMissing = New System.Windows.Forms.Label()
         Me.TabControlErrors.SuspendLayout()
+        Me.TabMissing.SuspendLayout()
         Me.TabConversions.SuspendLayout()
         Me.TabRequired.SuspendLayout()
         Me.TabUnique.SuspendLayout()
         Me.TabMalformed.SuspendLayout()
         Me.pnlButtons.SuspendLayout()
-        Me.TabMissing.SuspendLayout()
         Me.SuspendLayout()
         '
         'rdbSkipRecords
         '
         Me.rdbSkipRecords.AutoSize = True
-        Me.rdbSkipRecords.Location = New System.Drawing.Point(27, 0)
+        Me.rdbSkipRecords.Location = New System.Drawing.Point(4, 5)
         Me.rdbSkipRecords.Name = "rdbSkipRecords"
         Me.rdbSkipRecords.Size = New System.Drawing.Size(135, 17)
         Me.rdbSkipRecords.TabIndex = 0
@@ -60,7 +60,7 @@ Partial Class frmErr
         'rdbBlankFields
         '
         Me.rdbBlankFields.AutoSize = True
-        Me.rdbBlankFields.Location = New System.Drawing.Point(27, 23)
+        Me.rdbBlankFields.Location = New System.Drawing.Point(3, 28)
         Me.rdbBlankFields.Name = "rdbBlankFields"
         Me.rdbBlankFields.Size = New System.Drawing.Size(371, 17)
         Me.rdbBlankFields.TabIndex = 1
@@ -71,7 +71,7 @@ Partial Class frmErr
         '
         Me.rdbCancel.AutoSize = True
         Me.rdbCancel.Checked = True
-        Me.rdbCancel.Location = New System.Drawing.Point(27, 46)
+        Me.rdbCancel.Location = New System.Drawing.Point(3, 51)
         Me.rdbCancel.Name = "rdbCancel"
         Me.rdbCancel.Size = New System.Drawing.Size(136, 17)
         Me.rdbCancel.TabIndex = 2
@@ -82,9 +82,9 @@ Partial Class frmErr
         'btnOK
         '
         Me.btnOK.DialogResult = System.Windows.Forms.DialogResult.OK
-        Me.btnOK.Location = New System.Drawing.Point(345, 54)
+        Me.btnOK.Location = New System.Drawing.Point(398, 400)
         Me.btnOK.Name = "btnOK"
-        Me.btnOK.Size = New System.Drawing.Size(70, 20)
+        Me.btnOK.Size = New System.Drawing.Size(43, 20)
         Me.btnOK.TabIndex = 3
         Me.btnOK.Text = "OK"
         Me.btnOK.UseVisualStyleBackColor = True
@@ -101,6 +101,24 @@ Partial Class frmErr
         Me.TabControlErrors.SelectedIndex = 0
         Me.TabControlErrors.Size = New System.Drawing.Size(435, 356)
         Me.TabControlErrors.TabIndex = 5
+        '
+        'TabMissing
+        '
+        Me.TabMissing.Controls.Add(Me.lblMissing)
+        Me.TabMissing.Location = New System.Drawing.Point(4, 22)
+        Me.TabMissing.Name = "TabMissing"
+        Me.TabMissing.Size = New System.Drawing.Size(427, 330)
+        Me.TabMissing.TabIndex = 4
+        Me.TabMissing.Text = "Missing Record ID#s"
+        Me.TabMissing.UseVisualStyleBackColor = True
+        '
+        'lblMissing
+        '
+        Me.lblMissing.AutoSize = True
+        Me.lblMissing.Location = New System.Drawing.Point(3, 7)
+        Me.lblMissing.Name = "lblMissing"
+        Me.lblMissing.Size = New System.Drawing.Size(0, 13)
+        Me.lblMissing.TabIndex = 0
         '
         'TabConversions
         '
@@ -178,32 +196,13 @@ Partial Class frmErr
         '
         'pnlButtons
         '
-        Me.pnlButtons.Controls.Add(Me.btnOK)
         Me.pnlButtons.Controls.Add(Me.rdbCancel)
         Me.pnlButtons.Controls.Add(Me.rdbBlankFields)
         Me.pnlButtons.Controls.Add(Me.rdbSkipRecords)
         Me.pnlButtons.Location = New System.Drawing.Point(12, 374)
         Me.pnlButtons.Name = "pnlButtons"
-        Me.pnlButtons.Size = New System.Drawing.Size(422, 86)
+        Me.pnlButtons.Size = New System.Drawing.Size(380, 86)
         Me.pnlButtons.TabIndex = 6
-        '
-        'TabMissing
-        '
-        Me.TabMissing.Controls.Add(Me.lblMissing)
-        Me.TabMissing.Location = New System.Drawing.Point(4, 22)
-        Me.TabMissing.Name = "TabMissing"
-        Me.TabMissing.Size = New System.Drawing.Size(427, 330)
-        Me.TabMissing.TabIndex = 4
-        Me.TabMissing.Text = "Missing Record ID#s"
-        Me.TabMissing.UseVisualStyleBackColor = True
-        '
-        'lblMissing
-        '
-        Me.lblMissing.AutoSize = True
-        Me.lblMissing.Location = New System.Drawing.Point(3, 7)
-        Me.lblMissing.Name = "lblMissing"
-        Me.lblMissing.Size = New System.Drawing.Size(0, 13)
-        Me.lblMissing.TabIndex = 0
         '
         'frmErr
         '
@@ -211,6 +210,7 @@ Partial Class frmErr
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.ClientSize = New System.Drawing.Size(459, 466)
+        Me.Controls.Add(Me.btnOK)
         Me.Controls.Add(Me.pnlButtons)
         Me.Controls.Add(Me.TabControlErrors)
         Me.MaximizeBox = False
@@ -220,6 +220,8 @@ Partial Class frmErr
         Me.Text = "Please Indicate How to Handle Import Errors"
         Me.TopMost = True
         Me.TabControlErrors.ResumeLayout(False)
+        Me.TabMissing.ResumeLayout(False)
+        Me.TabMissing.PerformLayout()
         Me.TabConversions.ResumeLayout(False)
         Me.TabConversions.PerformLayout()
         Me.TabRequired.ResumeLayout(False)
@@ -230,8 +232,6 @@ Partial Class frmErr
         Me.TabMalformed.PerformLayout()
         Me.pnlButtons.ResumeLayout(False)
         Me.pnlButtons.PerformLayout()
-        Me.TabMissing.ResumeLayout(False)
-        Me.TabMissing.PerformLayout()
         Me.ResumeLayout(False)
 
     End Sub
