@@ -22,6 +22,7 @@ Partial Class frmRestore
     'Do not modify it using the code editor.
     <System.Diagnostics.DebuggerStepThrough()> _
     Private Sub InitializeComponent()
+        Dim resources As System.ComponentModel.ComponentResourceManager = New System.ComponentModel.ComponentResourceManager(GetType(frmRestore))
         Me.dgMapping = New System.Windows.Forms.DataGridView()
         Me.Source = New System.Windows.Forms.DataGridViewTextBoxColumn()
         Me.Destination = New System.Windows.Forms.DataGridViewComboBoxColumn()
@@ -320,6 +321,7 @@ Partial Class frmRestore
         Me.Controls.Add(Me.btnImport)
         Me.Controls.Add(Me.btnSource)
         Me.Controls.Add(Me.dgMapping)
+        Me.Icon = CType(resources.GetObject("$this.Icon"), System.Drawing.Icon)
         Me.Name = "frmRestore"
         Me.Text = "QuNect Restore"
         CType(Me.dgMapping, System.ComponentModel.ISupportInitialize).EndInit()

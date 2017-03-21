@@ -22,6 +22,7 @@ Partial Class frmTableChooser
     'Do not modify it using the code editor.
     <System.Diagnostics.DebuggerStepThrough()> _
     Private Sub InitializeComponent()
+        Dim resources As System.ComponentModel.ComponentResourceManager = New System.ComponentModel.ComponentResourceManager(GetType(frmTableChooser))
         Me.tvAppsTables = New System.Windows.Forms.TreeView()
         Me.btnDone = New System.Windows.Forms.Button()
         Me.SuspendLayout()
@@ -49,6 +50,7 @@ Partial Class frmTableChooser
         Me.ClientSize = New System.Drawing.Size(475, 426)
         Me.Controls.Add(Me.btnDone)
         Me.Controls.Add(Me.tvAppsTables)
+        Me.Icon = CType(resources.GetObject("$this.Icon"), System.Drawing.Icon)
         Me.Name = "frmTableChooser"
         Me.Text = "Choose a QuickBase Table"
         Me.ResumeLayout(False)

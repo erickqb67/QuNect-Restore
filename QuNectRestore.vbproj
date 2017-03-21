@@ -16,7 +16,7 @@
     <PublishUrl>C:\QuNect\QuNectRestore\QuNectRestore\publish\</PublishUrl>
     <Install>true</Install>
     <InstallFrom>Web</InstallFrom>
-    <UpdateEnabled>false</UpdateEnabled>
+    <UpdateEnabled>true</UpdateEnabled>
     <UpdateMode>Foreground</UpdateMode>
     <UpdateInterval>7</UpdateInterval>
     <UpdateIntervalUnits>Days</UpdateIntervalUnits>
@@ -28,7 +28,7 @@
     <ErrorReportUrl>http://www.qunect.com</ErrorReportUrl>
     <ProductName>QuNect Restore</ProductName>
     <PublisherName>QuNect</PublisherName>
-    <ApplicationRevision>1</ApplicationRevision>
+    <ApplicationRevision>5</ApplicationRevision>
     <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
     <UseApplicationTrust>false</UseApplicationTrust>
     <PublishWizardCompleted>true</PublishWizardCompleted>

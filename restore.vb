@@ -29,7 +29,8 @@ Public Class frmRestore
     Private fieldTypes As String()
     Private rids As HashSet(Of String)
     Private keyfid As String
-    Private uniqueFieldValues As Hashtable
+    Private uniqueExistingFieldValues As Dictionary(Of String, HashSet(Of String))
+    Private uniqueNewFieldValues As Dictionary(Of String, HashSet(Of String))
     Private sourceLabelToFieldType As Dictionary(Of String, String)
     Private sourceFieldNames As New Dictionary(Of String, Integer)
     Private destinationLabelsToFids As Dictionary(Of String, String)
@@ -63,9 +64,41 @@ Public Class frmRestore
         unique
         malformed
     End Enum
+    Private Sub restore_Load(sender As Object, e As EventArgs) Handles Me.Load
+        Me.Text = "QuNect Restore 1.0.0.5"
+        txtUsername.Text = GetSetting(AppName, "Credentials", "username")
+        txtPassword.Text = GetSetting(AppName, "Credentials", "password")
+        txtServer.Text = GetSetting(AppName, "Credentials", "server", "www.quickbase.com")
+        txtAppToken.Text = GetSetting(AppName, "Credentials", "apptoken", "b2fr52jcykx3tnbwj8s74b8ed55b")
+        lblFile.Text = GetSetting(AppName, "config", "file", "")
+        lblTable.Text = GetSetting(AppName, "config", "table", "")
+        Dim detectProxySetting As String = GetSetting(AppName, "Credentials", "detectproxysettings", "0")
+        If detectProxySetting = "1" Then
+            ckbDetectProxy.Checked = True
+        Else
+            ckbDetectProxy.Checked = False
+        End If
+        Dim firstRowHasHeaders As String = GetSetting(AppName, "config", "firstrowhasheaders", "1")
+        If firstRowHasHeaders = "1" Then
+            chkBxHeaders.Checked = True
+        Else
+            chkBxHeaders.Checked = False
+        End If
+
+        qdb = New QuickBaseClient(txtUsername.Text, txtPassword.Text)
+        qdb.proxyAuthenticateEx(True)
+
+        Dim myBuildInfo As FileVersionInfo = FileVersionInfo.GetVersionInfo(Application.ExecutablePath)
+        Dim ops As String() = New String() {"has any value", "equals", "does not equal", "greater than", "greater than or equal", "less than", "less than or equal", "contains", "does not contain", "starts with", "does not start with", "is null", "is not null"}
+        For i As Integer = 0 To ops.Count - 1
+            DirectCast(dgCriteria.Columns(filter.booleanOperator), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Add(ops(i))
+        Next
+        dgMapping.Visible = False
+        dgCriteria.Visible = False
+    End Sub
     Private Function restoreTable(checkForErrorsOnly As Boolean, previewOnly As Boolean) As Boolean
         restoreTable = True
-
+        Dim processOrderFoMappingRows = New ArrayList
         Dim dsPreview As New DataSet
         Dim dtPreview As New DataTable
         Dim drPreview As DataRow = Nothing
@@ -87,6 +120,8 @@ Public Class frmRestore
         Dim requiredFieldsErrors As String = ""
         Dim uniqueFieldErrors As String = ""
         Dim ridIsMapped As Boolean = False
+        Dim keyIsMapped As Boolean = False
+        Dim columnsMapped As Integer = 0
         For i As Integer = 0 To dgMapping.Rows.Count - 1
             Dim destComboBoxCell As DataGridViewComboBoxCell = DirectCast(dgMapping.Rows(i).Cells(mapping.destination), System.Windows.Forms.DataGridViewComboBoxCell)
             If destComboBoxCell.Value Is Nothing Then Continue For
@@ -111,44 +146,58 @@ Public Class frmRestore
                 End If
                 fidsForImport.Add(fid)
                 If fid = "3" Then ridIsMapped = True
+                If fid = keyfid Then
+                    processOrderFoMappingRows.Insert(0, columnsMapped)
+                    keyIsMapped = True
+                Else
+                    processOrderFoMappingRows.Add(columnsMapped)
+                End If
                 fids.Add(fid)
                 vals.Add("?")
                 importThese.Add(i)
                 fieldLabels.Add(label)
+                columnsMapped += 1
             End If
         Next
-        'now we need to look for unique fields
-        Dim restrictions(1) As String
-        restrictions(0) = dbid
+        Dim unmappedRequireds As Boolean = False
+        Dim unmappedUniques As Boolean = False
         Dim connectionString As String = "Driver={QuNect ODBC For QuickBase};uid=" & txtUsername.Text & ";pwd=" & txtPassword.Text & ";QUICKBASESERVER=" & txtServer.Text & ";USEFIDS=1;APPTOKEN=" & txtAppToken.Text
         Using connection As OdbcConnection = getquNectConn(connectionString)
             If connection Is Nothing Then Exit Function
             'also need to pull all the fields marked required
             If checkForErrorsOnly Then
-            frmErr.rdbCancel.Checked = True
-            uniqueFieldValues = New Hashtable
+                frmErr.rdbCancel.Checked = True
+                uniqueExistingFieldValues = New Dictionary(Of String, HashSet(Of String))
+                uniqueNewFieldValues = New Dictionary(Of String, HashSet(Of String))
 
                 For Each field As KeyValuePair(Of String, fieldStruct) In fieldNodes
                     Dim fid As String = field.Value.fid
-
-                    If field.Value.unique Then
+                    If field.Value.unique AndAlso field.Value.fid <> "3" Then
                         If Not fidsForImport.Contains(fid) Then
-                            requiredFieldsErrors &= "You must import values into the unique field: " & field.Value.label
-                            restoreTable = False
+                            If Not keyIsMapped Then
+                                uniqueFieldErrors &= "You must import values into the unique field: " & field.Value.label
+                                restoreTable = False
+                            Else
+                                unmappedUniques = True
+                            End If
                         ElseIf fid <> keyfid Then
                             'we also need to keep a list of the unique fields that we're importing into to check and make sure all imported values are unique
                             uniqueFidsForImport.Add(fid)
                             'do we need this hashset to check the imported values? We would need to check to see if we were updating an existing record or creating a new record
                             'if we have a 
                             If Not ridIsMapped Then
-                                uniqueFieldValues.Add(fid, qdb.getHashSetofFieldValues(dbid, fid))
+                                uniqueExistingFieldValues.Add(fid, qdb.getHashSetofFieldValues(dbid, fid))
                             End If
                         End If
                     End If
                     If field.Value.required Then
                         If Not fidsForImport.Contains(fid) Then
-                            requiredFieldsErrors &= "You must import values into the required field: " & field.Value.label
-                            restoreTable = False
+                            If Not keyIsMapped Then
+                                requiredFieldsErrors &= "You must import values into the required field: " & field.Value.label
+                                restoreTable = False
+                            Else
+                                unmappedRequireds = True
+                            End If
                         Else
                             'we also need to keep a list of the required fields that we're importing into
                             requiredFidsForImport.Add(fid)
@@ -156,12 +205,10 @@ Public Class frmRestore
                     End If
                 Next
             End If
-        If ridIsMapped And checkForErrorsOnly Then
-            'need to pull in all the rids from QuickBase
-            rids = qdb.getHashSetofFieldValues(dbid, "3")
-        Else
-            rids.Clear()
-        End If
+            If ridIsMapped And checkForErrorsOnly Then
+                'need to pull in all the rids from QuickBase
+                rids = qdb.getHashSetofFieldValues(dbid, "3")
+            End If
             strSQL &= "fid" & String.Join(",fid", fids.ToArray)
             strSQL &= ") VALUES ("
             strSQL &= String.Join(",", vals.ToArray)
@@ -227,25 +274,40 @@ Public Class frmRestore
                             If previewOnly Then
                                 drPreview = dtPreview.NewRow()
                             End If
-                            For i As Integer = 0 To importThese.Count - 1
+                            Dim importingIntoExistingRecord As Boolean = False
+                            For k As Integer = 0 To processOrderFoMappingRows.Count - 1
+                                Dim i As Integer = processOrderFoMappingRows(k)
                                 Dim val As String = currentRow(importThese(i))
                                 If previewOnly Then
                                     drPreview(i) = val
                                 End If
                                 If checkForErrorsOnly Then
-                                    If fids(i) = "3" AndAlso Not rids.Contains(val) Then
-                                        'here we're going to have a problem because this record no longer exists in QuickBase
-                                        'we could update all the child tables with the newly minted Record ID#s
-                                        'but we wouid have to do one record at a time to accomplish this
-                                        missingRIDs &= vbCrLf & "line " & fileLineCounter + 1 & " has Record ID# " & val & " which no longer exists"
-                                        If missingRIDs.Length > 1000 Then
-                                            missingRIDs &= vbCrLf & "There may be additional errors beyond the ones above."
-                                            Exit While
+                                    If keyIsMapped AndAlso k = 0 Then
+                                        'check if this is a new or existing key value
+                                        If fids(i) = "3" Then
+                                            If Not rids.Contains(val) Then
+                                                'here we're going to have a problem because this record no longer exists in QuickBase
+                                                'we could update all the child tables with the newly minted Record ID#s
+                                                'but we wouid have to do one record at a time to accomplish this
+                                                missingRIDs &= vbCrLf & "line " & fileLineCounter & " has Record ID# " & val & " which no longer exists"
+                                                If missingRIDs.Length > 1000 Then
+                                                    missingRIDs &= vbCrLf & "There may be additional errors beyond the ones above."
+                                                    Exit While
+                                                End If
+                                            Else
+                                                importingIntoExistingRecord = True
+                                            End If
+                                        Else
+                                            'the key field is not Record ID#
+                                            'does this value exist in the table already?
+                                            If uniqueExistingFieldValues(fids(i)).Contains(val) Then
+                                                importingIntoExistingRecord = True
+                                            End If
                                         End If
                                     End If
                                     If requiredFidsForImport.Contains(fids(i)) Then
                                         If val = "" Then
-                                            requiredFieldsErrors &= vbCrLf & "line " & fileLineCounter + 1 & " has a blank value mapped To required field " & fieldLabels(i)
+                                            requiredFieldsErrors &= vbCrLf & "line " & fileLineCounter & " has a blank value mapped to required field " & fieldLabels(i)
                                             If requiredFieldsErrors.Length > 1000 Then
                                                 requiredFieldsErrors &= vbCrLf & "There may be additional errors beyond the ones above."
                                                 Exit While
@@ -254,19 +316,23 @@ Public Class frmRestore
                                     End If
                                     If uniqueFidsForImport.Contains(fids(i)) Then
                                         'here we need to see if we have a duplicate
-                                        If Not uniqueFieldValues.Contains(fids(i)) Then
-                                            uniqueFieldValues.Add(fids(i), New HashSet(Of String))
+                                        If Not uniqueNewFieldValues.Contains(fids(i)) Then
+                                            uniqueNewFieldValues.Add(fids(i), New HashSet(Of String))
                                         End If
-                                        If uniqueFieldValues(fids(i)).contains(val) Then
-                                            uniqueFieldErrors &= vbCrLf & "line " & fileLineCounter + 1 & " has a duplicate value For unique field " & fieldLabels(i)
+                                        If uniqueNewFieldValues(fids(i)).Contains(val) Then
+                                            uniqueFieldErrors &= vbCrLf & "line " & fileLineCounter & " has a duplicate value for unique field " & fieldLabels(i)
                                         Else
-                                            uniqueFieldValues(fids(i)).add(val)
+                                            uniqueNewFieldValues(fids(i)).Add(val)
+                                        End If
+                                        If val = "" Then
+                                            uniqueFieldErrors &= vbCrLf & "line " & fileLineCounter & " has a blank value mapped to unique field " & fieldLabels(i)
                                         End If
                                         If uniqueFieldErrors.Length > 1000 Then
                                             uniqueFieldErrors &= vbCrLf & "There may be additional errors beyond the ones above."
                                             Exit While
                                         End If
                                     End If
+
                                 ElseIf fids(i) = "3" AndAlso Not rids.Contains(val) Then
                                     If frmErr.rdbSkipRecords.Checked Then
                                         Continue While
@@ -280,6 +346,14 @@ Public Class frmRestore
                                 End If
 
                             Next
+                            If Not importingIntoExistingRecord Then
+                                If unmappedRequireds Then
+                                    requiredFieldsErrors &= vbCrLf & "line " & fileLineCounter & " will create a new record and leave required fields blank"
+                                End If
+                                If unmappedUniques Then
+                                    uniqueFieldErrors &= vbCrLf & "line " & fileLineCounter & " will create a new record and leave unique fields blank"
+                                End If
+                            End If
                             If previewOnly Then
                                 dtPreview.Rows.Add(drPreview)
                             End If
@@ -287,7 +361,7 @@ Public Class frmRestore
 
                         Catch ex As Exception
                             If checkForErrorsOnly Then
-                                improperlyFormattedLines &= vbCrLf & "line " & fileLineCounter + 1 & " Is Not a properly formatted CSV line."
+                                improperlyFormattedLines &= vbCrLf & "line " & fileLineCounter & " Is Not a properly formatted CSV line."
                                 If improperlyFormattedLines.Length > 1000 Then
                                     improperlyFormattedLines &= vbCrLf & "There may be additional errors beyond the ones above."
                                     Exit While
@@ -307,6 +381,7 @@ Public Class frmRestore
                     If previewOnly And restoreTable Then
                         dsPreview.Tables.Add(dtPreview)
                         frmPreview.dgPreview.DataSource = dsPreview.Tables(0)
+                        frmPreview.lblPreview.Text = "Out of " & fileLineCounter & " lines in CSV found " & lineCounter & " records for import."
                         frmPreview.ShowDialog()
                     End If
                 Catch ex As Exception
@@ -772,6 +847,7 @@ Public Class frmRestore
                 'Loop through all of the fields in the schema.
                 DirectCast(dgMapping.Columns(mapping.destination), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Clear()
                 DirectCast(dgCriteria.Columns(filter.source), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Clear()
+                DirectCast(dgMapping.Columns(mapping.destination), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Add("")
                 DirectCast(dgMapping.Columns(mapping.destination), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Add("Do not import")
                 While (dr.Read())
                     Dim field As New fieldStruct
@@ -813,27 +889,11 @@ Public Class frmRestore
                                 sourceLabelToFieldType.Add(sourceFieldName, fieldNodes(clist(i)).type)
                             End If
                             If sourceFieldName = "" Then Continue For
-                            Dim j As Integer = dgMapping.Rows.Add(New String() {sourceFieldName})
+                            dgMapping.Rows.Add(New String() {sourceFieldName})
                             sourceFieldNames.Add(sourceFieldName, i)
                             DirectCast(dgCriteria.Columns(filter.source), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Add(sourceFieldName)
-                            'DirectCast(dgCriteria.Rows(j).Cells(filter.booleanOperator), System.Windows.Forms.DataGridViewComboBoxCell).Value = "has any value"
-                            'now we have to see if we can match this to a field in the table
-                            'DirectCast(dgMapping.Rows(j).Cells(mapping.destination), System.Windows.Forms.DataGridViewComboBoxCell).Value = "Do not import"
-                            If clist.Length > i Then
-                                For Each field As KeyValuePair(Of String, fieldStruct) In fieldNodes
-                                    If field.Key = clist(i) AndAlso field.Value.type <> "address" Then
-                                        DirectCast(dgMapping.Rows(j).Cells(mapping.destination), System.Windows.Forms.DataGridViewComboBoxCell).Value = field.Value.label
-                                        Exit For
-                                    End If
-                                Next
-                            Else
-                                For Each field As KeyValuePair(Of String, fieldStruct) In fieldNodes
-                                    If field.Value.label = sourceFieldName AndAlso field.Value.type <> "address" Then
-                                        DirectCast(dgMapping.Rows(j).Cells(mapping.destination), System.Windows.Forms.DataGridViewComboBoxCell).Value = sourceFieldName
-                                        Exit For
-                                    End If
-                                Next
-                            End If
+                            guessDestination(clist, sourceFieldName, i)
+
                         Next
 
                     Catch ex As Microsoft.VisualBasic.FileIO.MalformedLineException
@@ -853,6 +913,23 @@ Public Class frmRestore
         End Try
 
     End Sub
+    Sub guessDestination(clist As String(), sourceFieldName As String, sourceFieldOrdinal As Integer)
+        If clist.Length > sourceFieldOrdinal Then
+            For Each field As KeyValuePair(Of String, fieldStruct) In fieldNodes
+                If field.Key = clist(sourceFieldOrdinal) AndAlso field.Value.type <> "address" Then
+                    DirectCast(dgMapping.Rows(sourceFieldOrdinal).Cells(mapping.destination), System.Windows.Forms.DataGridViewComboBoxCell).Value = field.Value.label
+                    Exit For
+                End If
+            Next
+        Else
+            For Each field As KeyValuePair(Of String, fieldStruct) In fieldNodes
+                If field.Value.label = sourceFieldName AndAlso field.Value.type <> "address" Then
+                    DirectCast(dgMapping.Rows(sourceFieldOrdinal).Cells(mapping.destination), System.Windows.Forms.DataGridViewComboBoxCell).Value = sourceFieldName
+                    Exit For
+                End If
+            Next
+        End If
+    End Sub
     Private Sub txtServer_TextChanged(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles txtServer.TextChanged
         SaveSetting(AppName, "Credentials", "server", txtServer.Text)
     End Sub
@@ -870,38 +947,7 @@ Public Class frmRestore
             SaveSetting(AppName, "config", "firstrowhasheaders", "0")
         End If
     End Sub
-    Private Sub restore_Load(sender As Object, e As EventArgs) Handles Me.Load
-        Me.Text = "QuNect Restore 1.0.0.1"
-        txtUsername.Text = GetSetting(AppName, "Credentials", "username")
-        txtPassword.Text = GetSetting(AppName, "Credentials", "password")
-        txtServer.Text = GetSetting(AppName, "Credentials", "server", "www.quickbase.com")
-        txtAppToken.Text = GetSetting(AppName, "Credentials", "apptoken", "b2fr52jcykx3tnbwj8s74b8ed55b")
-        lblFile.Text = GetSetting(AppName, "config", "file", "")
-        lblTable.Text = GetSetting(AppName, "config", "table", "")
-        Dim detectProxySetting As String = GetSetting(AppName, "Credentials", "detectproxysettings", "0")
-        If detectProxySetting = "1" Then
-            ckbDetectProxy.Checked = True
-        Else
-            ckbDetectProxy.Checked = False
-        End If
-        Dim firstRowHasHeaders As String = GetSetting(AppName, "config", "firstrowhasheaders", "1")
-        If firstRowHasHeaders = "1" Then
-            chkBxHeaders.Checked = True
-        Else
-            chkBxHeaders.Checked = False
-        End If
 
-        qdb = New QuickBaseClient(txtUsername.Text, txtPassword.Text)
-        qdb.proxyAuthenticateEx(True)
-
-        Dim myBuildInfo As FileVersionInfo = FileVersionInfo.GetVersionInfo(Application.ExecutablePath)
-        Dim ops As String() = New String() {"has any value", "equals", "does not equal", "greater than", "greater than or equal", "less than", "less than or equal", "contains", "does not contain", "starts with", "does not start with", "is null", "is not null"}
-        For i As Integer = 0 To ops.Count - 1
-            DirectCast(dgCriteria.Columns(filter.booleanOperator), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Add(ops(i))
-        Next
-        dgMapping.Visible = False
-        dgCriteria.Visible = False
-    End Sub
 
     Private Sub btnImport_Click(sender As Object, e As EventArgs) Handles btnImport.Click
         If restoreTable(True, False) Then
@@ -919,10 +965,6 @@ Public Class frmRestore
             Me.Cursor = Cursors.Default
             Exit Sub
         End If
-        'qdb.setServer(txtServer.Text, True)
-        'qdb.setAppToken(txtAppToken.Text)
-        'qdb.Authenticate(txtUsername.Text, txtPassword.Text)
-        'qdb.GetSchema(lblTable.Text, New AsyncCallback(AddressOf schemaCallback), New AsyncCallback(AddressOf timeoutCallback))
         listFields(lblTable.Text)
     End Sub
 
@@ -1001,6 +1043,17 @@ Public Class frmRestore
 
     Private Sub btnPreview_Click(sender As Object, e As EventArgs) Handles btnPreview.Click
         restoreTable(True, True)
+    End Sub
+
+    Private Sub dgMapping_CellMouseClick(sender As Object, e As DataGridViewCellMouseEventArgs) Handles dgMapping.CellMouseClick
+        If e.RowIndex > 0 AndAlso e.ColumnIndex = mapping.source Then
+            If dgMapping.Rows(e.RowIndex).Cells(mapping.destination).Value = "" Then
+                guessDestination(clist, dgMapping.Rows(e.RowIndex).Cells(mapping.source).Value, e.RowIndex)
+            Else
+                dgMapping.Rows(e.RowIndex).Cells(mapping.destination).Value = ""
+            End If
+
+        End If
     End Sub
 End Class
 
