@@ -55,7 +55,7 @@ Public Class frmRestore
         malformed
     End Enum
     Private Sub restore_Load(sender As Object, e As EventArgs) Handles Me.Load
-        Text = "QuNect Restore 1.0.0.9" ' & ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString
+        Text = "QuNect Restore 1.0.0.11" ' & ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString
         txtUsername.Text = GetSetting(AppName, "Credentials", "username")
         txtPassword.Text = GetSetting(AppName, "Credentials", "password")
         txtServer.Text = GetSetting(AppName, "Credentials", "server", "www.quickbase.com")
@@ -837,15 +837,20 @@ Public Class frmRestore
                 If Not dr.HasRows Then
                     Exit Sub
                 End If
-                Dim fidReader As New Microsoft.VisualBasic.FileIO.TextFieldParser(Regex.Replace(lblFile.Text, "csv$", "fids"))
-                fidReader.TextFieldType = Microsoft.VisualBasic.FileIO.FieldType.Delimited
-                fidReader.Delimiters = New String() {"."}
-                clist = fidReader.ReadFields()
-                If Not fidReader.EndOfData Then
-                    fieldTypes = fidReader.ReadFields()
-                Else
+                Try
+                    Dim fidReader As New Microsoft.VisualBasic.FileIO.TextFieldParser(Regex.Replace(lblFile.Text, "csv$", "fids"))
+                    fidReader.TextFieldType = Microsoft.VisualBasic.FileIO.FieldType.Delimited
+                    fidReader.Delimiters = New String() {"."}
+                    clist = fidReader.ReadFields()
+                    If Not fidReader.EndOfData Then
+                        fieldTypes = fidReader.ReadFields()
+                    Else
+                        fieldTypes = Nothing
+                    End If
+                Catch
                     fieldTypes = Nothing
-                End If
+                    clist = Nothing
+                End Try
                 'here we need to open the csv and get the field names
                 Dim csvReader As New Microsoft.VisualBasic.FileIO.TextFieldParser(lblFile.Text)
                 csvReader.TextFieldType = Microsoft.VisualBasic.FileIO.FieldType.Delimited
@@ -890,9 +895,9 @@ Public Class frmRestore
                             If sourceFieldName = "" Then
                                 Exit For
                             End If
-                            If fieldTypes.Length = currentRow.Length - 1 Then
+                            If Not fieldTypes Is Nothing AndAlso fieldTypes.Length = currentRow.Length - 1 Then
                                 sourceLabelToFieldType.Add(sourceFieldName, fieldTypes(i))
-                            ElseIf fieldNodes.ContainsKey(clist(i)) Then
+                            ElseIf Not clist Is Nothing AndAlso fieldNodes.ContainsKey(clist(i)) Then
                                 sourceLabelToFieldType.Add(sourceFieldName, fieldNodes(clist(i)).type)
                             End If
                             If sourceFieldName = "" Then Continue For
@@ -921,7 +926,7 @@ Public Class frmRestore
 
     End Sub
     Sub guessDestination(clist As String(), sourceFieldName As String, sourceFieldOrdinal As Integer)
-        If clist.Length > sourceFieldOrdinal Then
+        If Not clist Is Nothing AndAlso clist.Length > sourceFieldOrdinal Then
             For Each field As KeyValuePair(Of String, fieldStruct) In fieldNodes
                 If field.Key = clist(sourceFieldOrdinal) AndAlso field.Value.type <> "address" Then
                     DirectCast(dgMapping.Rows(sourceFieldOrdinal).Cells(mapping.destination), System.Windows.Forms.DataGridViewComboBoxCell).Value = field.Value.label
