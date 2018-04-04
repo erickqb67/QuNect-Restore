@@ -55,7 +55,7 @@ Public Class frmRestore
         malformed
     End Enum
     Private Sub restore_Load(sender As Object, e As EventArgs) Handles Me.Load
-        Text = "QuNect Restore 1.0.0.11" ' & ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString
+        Text = "QuNect Restore 1.0.0.12" ' & ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString
         txtUsername.Text = GetSetting(AppName, "Credentials", "username")
         txtPassword.Text = GetSetting(AppName, "Credentials", "password")
         txtServer.Text = GetSetting(AppName, "Credentials", "server", "www.quickbase.com")
@@ -135,7 +135,7 @@ Public Class frmRestore
             If destComboBoxCell.Value Is Nothing Then Continue For
             Dim destDDIndex = destComboBoxCell.Items.IndexOf(destComboBoxCell.Value)
 
-            If destDDIndex > 0 Then
+            If destDDIndex > 1 Then
                 'this is a field that needs importing
                 Dim fieldNode As fieldStruct = fieldNodes(destinationLabelsToFids(destComboBoxCell.Value))
                 Dim label As String = fieldNode.label
