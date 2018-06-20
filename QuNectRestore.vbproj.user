@@ -2,7 +2,7 @@
 <Project ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <PublishUrlHistory>C:\QuNect\QuNectRestore\QuNectRestore\publish\|publish\</PublishUrlHistory>
-    <InstallUrlHistory>https://www.qunectllc.com/download/QuNectRestore/</InstallUrlHistory>
+    <InstallUrlHistory>https://www.qunect.com/download/QuNectRestore/|https://www.qunectllc.com/download/QuNectRestore/</InstallUrlHistory>
     <SupportUrlHistory>http://www.qunect.com</SupportUrlHistory>
     <UpdateUrlHistory />
     <BootstrapperUrlHistory />

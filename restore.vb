@@ -55,8 +55,9 @@ Public Class frmRestore
         malformed
     End Enum
     Private Sub restore_Load(sender As Object, e As EventArgs) Handles Me.Load
-        Text = "QuNect Restore 1.0.0.12" ' & ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString
+        Text = "QuNect Restore 1.0.0.15" ' & ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString
         txtUsername.Text = GetSetting(AppName, "Credentials", "username")
+        cmbPassword.SelectedIndex = CInt(GetSetting(AppName, "Credentials", "passwordOrToken", "0"))
         txtPassword.Text = GetSetting(AppName, "Credentials", "password")
         txtServer.Text = GetSetting(AppName, "Credentials", "server", "www.quickbase.com")
         txtAppToken.Text = GetSetting(AppName, "Credentials", "apptoken", "b2fr52jcykx3tnbwj8s74b8ed55b")
@@ -82,11 +83,31 @@ Public Class frmRestore
         Next
         dgMapping.Visible = False
         dgCriteria.Visible = False
+
     End Sub
+    Private Function getConnectionString(usefids As Boolean, allFieldNameCharacters As Boolean) As String
+        Dim connectionString As String = "Driver={QuNect ODBC for QuickBase};uid=" & txtUsername.Text & ";pwd=" & txtPassword.Text & ";QUICKBASESERVER=" & txtServer.Text & ";APPTOKEN=" & txtAppToken.Text
+        If usefids Then
+            connectionString &= ";USEFIDS=1"
+        End If
+        If allFieldNameCharacters Then
+            connectionString &= ";FIELDNAMECHARACTERS=all"
+        End If
+        If cmbPassword.SelectedIndex = 0 Then
+            cmbPassword.Focus()
+            Throw New System.Exception("Please indicate whether you are using a password or a user token.")
+            Return ""
+        ElseIf cmbPassword.SelectedIndex = 1 Then
+            connectionString &= ";PWDISPASSWORD=1"
+        Else
+            connectionString &= ";PWDISPASSWORD=0"
+        End If
+        Return connectionString
+    End Function
     Private Function getHashSetofFieldValues(dbid As String, fid As String) As HashSet(Of String)
         Dim strSQL As String = "SELECT fid" & fid & " FROM " & dbid
         getHashSetofFieldValues = New HashSet(Of String)
-        Dim connectionString As String = "Driver={QuNect ODBC For QuickBase};uid=" & txtUsername.Text & ";pwd=" & txtPassword.Text & ";QUICKBASESERVER=" & txtServer.Text & ";USEFIDS=1;APPTOKEN=" & txtAppToken.Text
+        Dim connectionString As String = getConnectionString(True, False) '"Driver={QuNect ODBC For QuickBase};uid=" & txtUsername.Text & ";pwd=" & txtPassword.Text & ";QUICKBASESERVER=" & txtServer.Text & ";USEFIDS=1;APPTOKEN=" & txtAppToken.Text
         Using quNectConn As OdbcConnection = getquNectConn(connectionString)
             Using quNectCmd As OdbcCommand = New OdbcCommand(strSQL, quNectConn)
                 Dim dr As OdbcDataReader
@@ -169,7 +190,7 @@ Public Class frmRestore
         Next
         Dim unmappedRequireds As Boolean = False
         Dim unmappedUniques As Boolean = False
-        Dim connectionString As String = "Driver={QuNect ODBC For QuickBase};uid=" & txtUsername.Text & ";pwd=" & txtPassword.Text & ";QUICKBASESERVER=" & txtServer.Text & ";USEFIDS=1;APPTOKEN=" & txtAppToken.Text
+        Dim connectionString As String = getConnectionString(True, False) '"Driver={QuNect ODBC For QuickBase};uid=" & txtUsername.Text & ";pwd=" & txtPassword.Text & ";QUICKBASESERVER=" & txtServer.Text & ";USEFIDS=1;APPTOKEN=" & txtAppToken.Text
         Using connection As OdbcConnection = getquNectConn(connectionString)
             If connection Is Nothing Then Exit Function
             'also need to pull all the fields marked required
@@ -423,7 +444,7 @@ Public Class frmRestore
         qdbVer.year = CInt(m.Groups(1).Value)
         qdbVer.major = CInt(m.Groups(2).Value)
         qdbVer.minor = CInt(m.Groups(3).Value)
-        If (qdbVer.major < 6) Or (qdbVer.major = 6 And qdbVer.minor < 84) Then
+        If (qdbVer.major < 7) Or (qdbVer.major = 7 And qdbVer.minor < 63) Then
             MsgBox("You are running the " & ver & " version of QuNect ODBC for QuickBase. Please install the latest version from http://qunect.com/download/QuNect.exe")
             quNectConn.Close()
             Me.Cursor = Cursors.Default
@@ -752,8 +773,7 @@ Public Class frmRestore
     End Sub
     Private Sub listTables()
         Me.Cursor = Cursors.WaitCursor
-
-        Dim connectionString As String = "Driver={QuNect ODBC for QuickBase};FIELDNAMECHARACTERS=all;uid=" & txtUsername.Text & ";pwd=" & txtPassword.Text & ";QUICKBASESERVER=" & txtServer.Text & ";APPTOKEN=" & txtAppToken.Text
+        Dim connectionString As String = getConnectionString(False, True) '"Driver={QuNect ODBC for QuickBase};FIELDNAMECHARACTERS=all;uid=" & txtUsername.Text & ";pwd=" & txtPassword.Text & ";QUICKBASESERVER=" & txtServer.Text & ";APPTOKEN=" & txtAppToken.Text
         Try
             Using quNectConn As OdbcConnection = getquNectConn(connectionString)
                 Dim tables As DataTable = quNectConn.GetSchema("Tables")
@@ -819,12 +839,12 @@ Public Class frmRestore
         Dim fidToLabel As New Dictionary(Of String, String)
         fieldNodes = New Dictionary(Of String, fieldStruct)
         sourceFieldNames.Clear()
-        Dim connectionString As String = "Driver={QuNect ODBC for QuickBase};uid=" & txtUsername.Text & ";pwd=" & txtPassword.Text & ";QUICKBASESERVER=" & txtServer.Text & ";APPTOKEN=" & txtAppToken.Text
         Try
+            Dim connectionString As String = getConnectionString(False, False) '"Driver={QuNect ODBC for QuickBase};uid=" & txtUsername.Text & ";pwd=" & txtPassword.Text & ";QUICKBASESERVER=" & txtServer.Text & ";APPTOKEN=" & txtAppToken.Text
             Dim currentRow As String()
             Using connection As OdbcConnection = getquNectConn(connectionString)
                 If connection Is Nothing Then Exit Sub
-                Dim strSQL As String = "SELECT label, fid, field_type, parentFieldID, ""unique"", required, ""key"", base_type, decimal_places  FROM """ & dbid & "~fields"" WHERE (mode = '' and role = '') or fid = '3'"
+                Dim strSQL As String = "SELECT label, fid, field_type, parentFieldID, ""isunique"", required, ""iskey"", base_type, decimal_places  FROM """ & dbid & "~fields"" WHERE (mode = '' and role = '') or fid = '3'"
 
                 Dim quNectCmd As OdbcCommand = New OdbcCommand(strSQL, connection)
                 Dim dr As OdbcDataReader
@@ -832,6 +852,7 @@ Public Class frmRestore
                     dr = quNectCmd.ExecuteReader()
                 Catch excpt As Exception
                     quNectCmd.Dispose()
+                    MsgBox(excpt.Message, MsgBoxStyle.OkOnly, AppName)
                     Exit Sub
                 End Try
                 If Not dr.HasRows Then
@@ -1065,6 +1086,16 @@ Public Class frmRestore
                 dgMapping.Rows(e.RowIndex).Cells(mapping.destination).Value = ""
             End If
 
+        End If
+    End Sub
+
+
+    Private Sub cmbPassword_SelectedIndexChanged(sender As Object, e As EventArgs) Handles cmbPassword.SelectedIndexChanged
+        SaveSetting(AppName, "Credentials", "passwordOrToken", cmbPassword.SelectedIndex)
+        If cmbPassword.SelectedIndex = 0 Then
+            txtPassword.Enabled = False
+        Else
+            txtPassword.Enabled = True
         End If
     End Sub
 End Class

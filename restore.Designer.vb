@@ -35,7 +35,6 @@ Partial Class frmRestore
         Me.txtAppToken = New System.Windows.Forms.TextBox()
         Me.lblServer = New System.Windows.Forms.Label()
         Me.txtServer = New System.Windows.Forms.TextBox()
-        Me.lblPassword = New System.Windows.Forms.Label()
         Me.txtPassword = New System.Windows.Forms.TextBox()
         Me.lblUsername = New System.Windows.Forms.Label()
         Me.txtUsername = New System.Windows.Forms.TextBox()
@@ -52,6 +51,7 @@ Partial Class frmRestore
         Me.btnPreview = New System.Windows.Forms.Button()
         Me.lblProgress = New System.Windows.Forms.Label()
         Me.lblMode = New System.Windows.Forms.Label()
+        Me.cmbPassword = New System.Windows.Forms.ComboBox()
         CType(Me.dgMapping, System.ComponentModel.ISupportInitialize).BeginInit()
         CType(Me.dgCriteria, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.SuspendLayout()
@@ -139,7 +139,7 @@ Partial Class frmRestore
         'lblServer
         '
         Me.lblServer.AutoSize = True
-        Me.lblServer.Location = New System.Drawing.Point(289, 11)
+        Me.lblServer.Location = New System.Drawing.Point(460, 19)
         Me.lblServer.Name = "lblServer"
         Me.lblServer.Size = New System.Drawing.Size(93, 13)
         Me.lblServer.TabIndex = 28
@@ -147,32 +147,23 @@ Partial Class frmRestore
         '
         'txtServer
         '
-        Me.txtServer.Location = New System.Drawing.Point(286, 30)
+        Me.txtServer.Location = New System.Drawing.Point(457, 38)
         Me.txtServer.Name = "txtServer"
         Me.txtServer.Size = New System.Drawing.Size(237, 20)
         Me.txtServer.TabIndex = 27
         '
-        'lblPassword
-        '
-        Me.lblPassword.AutoSize = True
-        Me.lblPassword.Location = New System.Drawing.Point(153, 11)
-        Me.lblPassword.Name = "lblPassword"
-        Me.lblPassword.Size = New System.Drawing.Size(108, 13)
-        Me.lblPassword.TabIndex = 26
-        Me.lblPassword.Text = "QuickBase Password"
-        '
         'txtPassword
         '
-        Me.txtPassword.Location = New System.Drawing.Point(150, 30)
+        Me.txtPassword.Location = New System.Drawing.Point(243, 37)
         Me.txtPassword.Name = "txtPassword"
         Me.txtPassword.PasswordChar = Global.Microsoft.VisualBasic.ChrW(42)
-        Me.txtPassword.Size = New System.Drawing.Size(120, 20)
+        Me.txtPassword.Size = New System.Drawing.Size(202, 20)
         Me.txtPassword.TabIndex = 25
         '
         'lblUsername
         '
         Me.lblUsername.AutoSize = True
-        Me.lblUsername.Location = New System.Drawing.Point(15, 11)
+        Me.lblUsername.Location = New System.Drawing.Point(15, 19)
         Me.lblUsername.Name = "lblUsername"
         Me.lblUsername.Size = New System.Drawing.Size(110, 13)
         Me.lblUsername.TabIndex = 24
@@ -180,9 +171,9 @@ Partial Class frmRestore
         '
         'txtUsername
         '
-        Me.txtUsername.Location = New System.Drawing.Point(12, 30)
+        Me.txtUsername.Location = New System.Drawing.Point(12, 37)
         Me.txtUsername.Name = "txtUsername"
-        Me.txtUsername.Size = New System.Drawing.Size(120, 20)
+        Me.txtUsername.Size = New System.Drawing.Size(213, 20)
         Me.txtUsername.TabIndex = 23
         '
         'lblTable
@@ -204,7 +195,7 @@ Partial Class frmRestore
         'ckbDetectProxy
         '
         Me.ckbDetectProxy.AutoSize = True
-        Me.ckbDetectProxy.Location = New System.Drawing.Point(556, 33)
+        Me.ckbDetectProxy.Location = New System.Drawing.Point(727, 41)
         Me.ckbDetectProxy.Name = "ckbDetectProxy"
         Me.ckbDetectProxy.Size = New System.Drawing.Size(188, 17)
         Me.ckbDetectProxy.TabIndex = 36
@@ -293,11 +284,22 @@ Partial Class frmRestore
         Me.lblMode.Size = New System.Drawing.Size(0, 13)
         Me.lblMode.TabIndex = 43
         '
+        'cmbPassword
+        '
+        Me.cmbPassword.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList
+        Me.cmbPassword.FormattingEnabled = True
+        Me.cmbPassword.Items.AddRange(New Object() {"Please choose...", "QuickBase Password", "QuickBase User Token"})
+        Me.cmbPassword.Location = New System.Drawing.Point(242, 12)
+        Me.cmbPassword.Name = "cmbPassword"
+        Me.cmbPassword.Size = New System.Drawing.Size(203, 21)
+        Me.cmbPassword.TabIndex = 44
+        '
         'frmRestore
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.ClientSize = New System.Drawing.Size(1128, 924)
+        Me.Controls.Add(Me.cmbPassword)
         Me.Controls.Add(Me.lblMode)
         Me.Controls.Add(Me.lblProgress)
         Me.Controls.Add(Me.btnPreview)
@@ -313,7 +315,6 @@ Partial Class frmRestore
         Me.Controls.Add(Me.txtAppToken)
         Me.Controls.Add(Me.lblServer)
         Me.Controls.Add(Me.txtServer)
-        Me.Controls.Add(Me.lblPassword)
         Me.Controls.Add(Me.txtPassword)
         Me.Controls.Add(Me.lblUsername)
         Me.Controls.Add(Me.txtUsername)
@@ -340,7 +341,6 @@ Partial Class frmRestore
     Friend WithEvents txtAppToken As System.Windows.Forms.TextBox
     Friend WithEvents lblServer As System.Windows.Forms.Label
     Friend WithEvents txtServer As System.Windows.Forms.TextBox
-    Friend WithEvents lblPassword As System.Windows.Forms.Label
     Friend WithEvents txtPassword As System.Windows.Forms.TextBox
     Friend WithEvents lblUsername As System.Windows.Forms.Label
     Friend WithEvents txtUsername As System.Windows.Forms.TextBox
@@ -359,4 +359,5 @@ Partial Class frmRestore
     Friend WithEvents btnPreview As Button
     Friend WithEvents lblProgress As Label
     Friend WithEvents lblMode As Label
+    Friend WithEvents cmbPassword As ComboBox
 End Class
