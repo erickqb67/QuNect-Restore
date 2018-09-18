@@ -318,6 +318,22 @@ Public Class frmRestore
                                                 'here we're going to have a problem because this record no longer exists in QuickBase
                                                 'we could update all the child tables with the newly minted Record ID#s
                                                 'but we wouid have to do one record at a time to accomplish this
+                                                'or we could create a copy of the Record ID# field by creating a number field called "QuNect Restore Temporary Record ID#" using the following SQL:
+                                                'ALTER TABLE bcmwcpqbv add "QuNect Restore Temporary Record ID#" DOUBLE
+                                                'Then we copy the Record ID# values from the built-in Record ID# field to the "QuNect Restore Temporary Record ID#" using the following SQL:
+                                                'UPDATE bcmwcpqbv SET "QuNect Restore Temporary Record ID#" = fid3
+                                                'then we make "QuNect Restore Temporary Record ID#" the key field using this SQL:
+                                                'ALTER TABLE bcmwcpqbv ADD CONSTRAINT PK_Temp PRIMARY KEY ("QuNect Restore Temporary Record ID#")
+                                                'Now when we insert records from a backup we map fid3 to this new field "QuNect Restore Temporary Record ID#"
+                                                'Now we don't have to worry about missing Record ID# values.
+                                                'After restoring all our records we switch the key field back to the Record ID# field.
+                                                'ALTER TABLE bcmwcpqbv ADD CONSTRAINT PK_Temp PRIMARY KEY ("Record ID#")
+                                                'Now we have a mapping from the old Record ID#s to the new Record ID#s. 
+                                                'To get this mapping we run the following SQL:
+                                                'INSERT INTO childdbid (childdbid.keyField, childdbid.referencefield) SELECT childdbid.keyField, parentdbid.fid3 FROM parentdbid INNER JOIN childdbid ON parentdbid."QuNect Restore Temporary Record ID#" = childdbid.referencefield
+                                                'Then we go back over all the tables and if there is a foreign key field that points to one of our restored tables
+                                                'we can update the reference field values with the mapping from the SQL statement:
+                                                'SELECT "QuNect Restore Temporary Record ID#", fid3 FROM parentdbid
                                                 missingRIDs &= vbCrLf & "line " & fileLineCounter & " has Record ID# " & val & " which no longer exists"
                                                 If missingRIDs.Length > 1000 Then
                                                     missingRIDs &= vbCrLf & "There may be additional errors beyond the ones above."
