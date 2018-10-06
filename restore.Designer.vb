@@ -52,6 +52,8 @@ Partial Class frmRestore
         Me.lblProgress = New System.Windows.Forms.Label()
         Me.lblMode = New System.Windows.Forms.Label()
         Me.cmbPassword = New System.Windows.Forms.ComboBox()
+        Me.cmbBulkorSingle = New System.Windows.Forms.ComboBox()
+        Me.FolderBrowserDialog = New System.Windows.Forms.FolderBrowserDialog()
         CType(Me.dgMapping, System.ComponentModel.ISupportInitialize).BeginInit()
         CType(Me.dgCriteria, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.SuspendLayout()
@@ -86,7 +88,7 @@ Partial Class frmRestore
         '
         'btnSource
         '
-        Me.btnSource.Location = New System.Drawing.Point(12, 145)
+        Me.btnSource.Location = New System.Drawing.Point(397, 142)
         Me.btnSource.Name = "btnSource"
         Me.btnSource.Size = New System.Drawing.Size(126, 27)
         Me.btnSource.TabIndex = 1
@@ -187,7 +189,7 @@ Partial Class frmRestore
         'lblFile
         '
         Me.lblFile.AutoSize = True
-        Me.lblFile.Location = New System.Drawing.Point(147, 152)
+        Me.lblFile.Location = New System.Drawing.Point(530, 152)
         Me.lblFile.Name = "lblFile"
         Me.lblFile.Size = New System.Drawing.Size(0, 13)
         Me.lblFile.TabIndex = 35
@@ -279,7 +281,7 @@ Partial Class frmRestore
         'lblMode
         '
         Me.lblMode.AutoSize = True
-        Me.lblMode.Location = New System.Drawing.Point(588, 152)
+        Me.lblMode.Location = New System.Drawing.Point(589, 97)
         Me.lblMode.Name = "lblMode"
         Me.lblMode.Size = New System.Drawing.Size(0, 13)
         Me.lblMode.TabIndex = 43
@@ -294,11 +296,22 @@ Partial Class frmRestore
         Me.cmbPassword.Size = New System.Drawing.Size(203, 21)
         Me.cmbPassword.TabIndex = 44
         '
+        'cmbBulkorSingle
+        '
+        Me.cmbBulkorSingle.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList
+        Me.cmbBulkorSingle.FormattingEnabled = True
+        Me.cmbBulkorSingle.Items.AddRange(New Object() {"Please choose", "Import a single CSV file with control of column mapping and record selection", "Bulk import all CSV files in a directory with no mapping or selection control"})
+        Me.cmbBulkorSingle.Location = New System.Drawing.Point(12, 146)
+        Me.cmbBulkorSingle.Name = "cmbBulkorSingle"
+        Me.cmbBulkorSingle.Size = New System.Drawing.Size(375, 21)
+        Me.cmbBulkorSingle.TabIndex = 45
+        '
         'frmRestore
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.ClientSize = New System.Drawing.Size(1128, 924)
+        Me.Controls.Add(Me.cmbBulkorSingle)
         Me.Controls.Add(Me.cmbPassword)
         Me.Controls.Add(Me.lblMode)
         Me.Controls.Add(Me.lblProgress)
@@ -360,4 +373,6 @@ Partial Class frmRestore
     Friend WithEvents lblProgress As Label
     Friend WithEvents lblMode As Label
     Friend WithEvents cmbPassword As ComboBox
+    Friend WithEvents cmbBulkorSingle As ComboBox
+    Friend WithEvents FolderBrowserDialog As FolderBrowserDialog
 End Class
