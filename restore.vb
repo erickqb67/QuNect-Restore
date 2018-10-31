@@ -105,7 +105,7 @@ Public Class frmRestore
             connectionString &= ";PWDISPASSWORD=0"
         End If
 #If DEBUG Then
-        connectionString &= ";LOGSQL=1;LOGAPI=1"
+        'connectionString &= ";LOGSQL=1;LOGAPI=1"
 #End If
         Return connectionString
     End Function
@@ -133,18 +133,10 @@ Public Class frmRestore
     Function buildDestinationFieldListAndAddParameters(fids As ArrayList, fieldNodes As Dictionary(Of String, fieldStruct), command As OdbcCommand, BuiltInRecordIDisKey As Boolean) As String
 
         buildDestinationFieldListAndAddParameters = ""
+        Dim qdbType As OdbcType
         For Each fid As String In fids
-            If fieldNodes(fid).label = "QuNect Restore Temporary Record ID#" Then
-                Continue For
-            End If
-            Dim qdbType As OdbcType = getODBCTypeFromQuickBaseFieldNode(fieldNodes(fid))
-            If fid = "3" AndAlso BuiltInRecordIDisKey Then
-                qdbType = OdbcType.Double
-
-                buildDestinationFieldListAndAddParameters &= "QuNect_Restore_Temporary_Record_ID_,"
-            Else
-                buildDestinationFieldListAndAddParameters &= "fid" & fid & ","
-            End If
+            qdbType = getODBCTypeFromQuickBaseFieldNode(fieldNodes(fid))
+            buildDestinationFieldListAndAddParameters &= "fid" & fid & ","
             If Not command Is Nothing Then
                 command.Parameters.Add("@fid" & fid, qdbType)
             End If
@@ -236,6 +228,15 @@ Public Class frmRestore
                 columnsMapped += 1
             End If
         Next
+        'now we need to map the Record ID# field to the "QuNect Restore Temporary Record ID#" field
+        If BuiltInRecordIDisKey Then
+            Dim fieldNode As fieldStruct = fieldNodes("3")
+            processOrderFoMappingRows.Add(columnsMapped)
+            fids.Add(fieldNode.fid)
+            vals.Add("?")
+            importThese.Add(importThese(0))
+            fieldLabels.Add(fieldNode.label)
+        End If
         Dim unmappedRequireds As Boolean = False
         Dim unmappedUniques As Boolean = False
         Dim connectionString As String = getConnectionString(False, False) '"Driver={QuNect ODBC For QuickBase};uid=" & txtUsername.Text & ";pwd=" & txtPassword.Text & ";QUICKBASESERVER=" & txtServer.Text & ";USEFIDS=1;APPTOKEN=" & txtAppToken.Text
@@ -450,18 +451,6 @@ Public Class frmRestore
                     End While
                     If Not checkForErrorsOnly Then
                         transaction.Commit()
-                        If BuiltInRecordIDisKey Then
-                            'After restoring all our records we switch the key field back to the Record ID# field.
-                            strSQL = "ALTER TABLE """ & dbid & """ ADD CONSTRAINT PK_Temp PRIMARY KEY (fid3)"
-                            Dim odbcCmd As OdbcCommand = New OdbcCommand(strSQL, connection)
-                            odbcCmd.ExecuteNonQuery()
-                            'need to remove the unique and required properties of the field QuNect_Restore_Temporary_Record_ID_
-                            odbcCmd.Dispose()
-                            strSQL = "UPDATE """ & dbid & "~fields"" SET required = 0, isunique = 0 where label = 'QuNect Restore Temporary Record ID#'"
-                            odbcCmd = New OdbcCommand(strSQL, connection)
-                            odbcCmd.ExecuteNonQuery()
-                            odbcCmd.Dispose()
-                        End If
                         If Not bulkRestore Then
                             MsgBox("Imported " & lineCounter & " records!", MsgBoxStyle.OkOnly, AppName)
                         End If
@@ -949,32 +938,6 @@ Public Class frmRestore
                 End Using
             End Using
             Using connection As OdbcConnection = getquNectConn(connectionString)
-                If keyField.label = "QuNect Restore Temporary Record ID#" Then
-                    'we need to set the key field back to fid3
-                    strSQL = "ALTER TABLE """ & dbid & """ ADD CONSTRAINT PK_Temp PRIMARY KEY (fid3)"
-                    Using quNectCmd As OdbcCommand = New OdbcCommand(strSQL, connection)
-                        Try
-                            quNectCmd.ExecuteNonQuery()
-                        Catch ex As Exception
-                            If Not ex.Message.Contains("Column label already exists") Then
-                                Throw ex
-                            End If
-                        Finally
-                            quNectCmd.Dispose()
-                            keyFID = 3
-                        End Try
-                    End Using
-                    strSQL = "DELETE FROM """ & dbid & "~fields"" WHERE label = 'QuNect Restore Temporary Record ID#'"
-                    Using quNectCmd As OdbcCommand = New OdbcCommand(strSQL, connection)
-                        Try
-                            quNectCmd.ExecuteNonQuery()
-                        Catch ex As Exception
-                            Throw ex
-                        Finally
-                            quNectCmd.Dispose()
-                        End Try
-                    End Using
-                End If
                 If keyFID = "3" Then
                     'we need to create a shadow key field
                     strSQL = "ALTER TABLE """ & dbid & """ ADD ""QuNect Restore Temporary Record ID#"" DOUBLE"
@@ -988,16 +951,6 @@ Public Class frmRestore
                         Finally
                             quNectCmd.Dispose()
                         End Try
-                    End Using
-                    strSQL = "UPDATE """ & dbid & """ SET QuNect_Restore_Temporary_Record_ID_ = fid3"
-                    Using quNectCmd As OdbcCommand = New OdbcCommand(strSQL, connection)
-                        quNectCmd.ExecuteNonQuery()
-                        quNectCmd.Dispose()
-                    End Using
-                    strSQL = "ALTER TABLE """ & dbid & """ ADD CONSTRAINT PK_Temp PRIMARY KEY (QuNect_Restore_Temporary_Record_ID_)"
-                    Using quNectCmd As OdbcCommand = New OdbcCommand(strSQL, connection)
-                        quNectCmd.ExecuteNonQuery()
-                        quNectCmd.Dispose()
                     End Using
                     preparePotentialParent = True
                 End If
@@ -1056,7 +1009,7 @@ Public Class frmRestore
                 DirectCast(dgCriteria.Columns(filter.source), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Clear()
                 DirectCast(dgMapping.Columns(mapping.destination), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Add("")
                 DirectCast(dgMapping.Columns(mapping.destination), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Add("Do not import")
-                While (dr.Read())
+                While (dr.Read()) 'we are looping through all the fields in the destination table here
                     Dim field As New fieldStruct
                     field.label = dr.GetString(0)
                     If field.label = "QuNect Restore Temporary Record ID#" Then
@@ -1090,7 +1043,8 @@ Public Class frmRestore
                         dgMapping.Rows.Clear()
                         For i As Integer = 0 To currentRow.Length - 1
                             Dim sourceFieldName As String = currentRow(i)
-                            If sourceFieldName = "QuNect Restore Temporary Record ID#" Then
+                            If sourceFieldName = "QuNect Restore Temporary Record ID#" Then 'this is just in case this field got backed up. It should be short lived
+                                'only while QuNect Restore is running and doing a restore
                                 Continue For
                             End If
                             If sourceFieldName = "" Then
