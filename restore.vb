@@ -1,4 +1,4 @@
-﻿Imports System.Data.Odbc
+Imports System.Data.Odbc
 Imports System.Text.RegularExpressions
 Imports System
 Imports System.IO
@@ -230,7 +230,12 @@ Public Class frmRestore
         Next
         'now we need to map the Record ID# field to the "QuNect Restore Temporary Record ID#" field
         If BuiltInRecordIDisKey Then
-            Dim fieldNode As fieldStruct = fieldNodes("3")
+            Dim fieldNode As New fieldStruct
+            fieldNode.label = "QuNect Restore Temporary Record ID#"
+            fieldNode.fid = getFIDofQuNectRestoreTemporaryRecordID(dbid)
+            fieldNode.type = "float"
+            fieldNode.base_type = "float"
+            fieldNodes.Add(fieldNode.fid, fieldNode)
             processOrderFoMappingRows.Add(columnsMapped)
             fids.Add(fieldNode.fid)
             vals.Add("?")
@@ -414,7 +419,7 @@ Public Class frmRestore
                                 ElseIf fids(i) = "3" AndAlso Not rids.Contains(val) Then
                                     If frmErr.rdbSkipRecords.Checked Then
                                         Continue While
-                                    ElseIf Not BuiltInRecordIDisKey Then
+                                    Else
                                         val = ""
                                     End If
                                 End If
@@ -560,7 +565,12 @@ Public Class frmRestore
         Try
             Select Case qdbType
                 Case OdbcType.Int
-                    command.Parameters("@fid" & fid).Value = Convert.ToInt32(val)
+                    If val = "" Then
+                        Dim nullInteger As Integer
+                        command.Parameters("@fid" & fid).Value = nullInteger
+                    Else
+                        command.Parameters("@fid" & fid).Value = Convert.ToInt32(val)
+                    End If
                 Case OdbcType.Double, OdbcType.Numeric
                     command.Parameters("@fid" & fid).Value = Convert.ToDouble(val)
                 Case OdbcType.Date
@@ -864,7 +874,6 @@ Public Class frmRestore
         pb.Value = 0
         pb.Visible = True
         pb.Maximum = tables.Rows.Count
-        Dim getDBIDfromdbName As New Regex("([a-z0-9~]+)$")
 
 
         For i = 0 To tables.Rows.Count - 1
@@ -872,8 +881,7 @@ Public Class frmRestore
             Application.DoEvents()
             dbName = tables.Rows(i)(2)
             applicationName = tables.Rows(i)(0)
-            Dim dbidMatch As Match = getDBIDfromdbName.Match(dbName)
-            dbid = dbidMatch.Value
+            dbid = tableNameToDBID(dbName)
             If applicationName <> prevAppName Then
 
                 Dim appNode As TreeNode = frmTableChooser.tvAppsTables.Nodes.Add(applicationName)
@@ -898,6 +906,35 @@ Public Class frmRestore
         frmTableChooser.Show()
         Me.Cursor = Cursors.Default
     End Sub
+    Function getFIDofQuNectRestoreTemporaryRecordID(dbid As String) As String
+        getFIDofQuNectRestoreTemporaryRecordID = ""
+        Try
+            Dim connectionString As String = getConnectionString(False, False) '"Driver={QuNect ODBC for QuickBase};uid=" & txtUsername.Text & ";pwd=" & txtPassword.Text & ";QUICKBASESERVER=" & txtServer.Text & ";APPTOKEN=" & txtAppToken.Text
+            Dim strSQL As String = "SELECT fid FROM """ & dbid & "~fields"" WHERE label = 'QuNect Restore Temporary Record ID#'"
+            Using connection As OdbcConnection = getquNectConn(connectionString)
+                If connection Is Nothing Then Exit Function
+
+                Using quNectCmd As OdbcCommand = New OdbcCommand(strSQL, connection)
+                    Dim dr As OdbcDataReader
+                    Try
+                        dr = quNectCmd.ExecuteReader()
+                    Catch excpt As Exception
+                        quNectCmd.Dispose()
+                        MsgBox(excpt.Message, MsgBoxStyle.OkOnly, AppName)
+                        Exit Function
+                    End Try
+                    If Not dr.HasRows Then
+                        Exit Function
+                    End If
+                    dr.Read()
+                    getFIDofQuNectRestoreTemporaryRecordID = dr.GetString(0)
+                    quNectCmd.Dispose()
+                End Using
+            End Using
+        Catch ex As Exception
+            MsgBox("Could not get fid of 'QuNect Restore Temporary Record ID#' in " & dbid & " " & ex.Message)
+        End Try
+    End Function
     Function preparePotentialParent(dbid As String) As Boolean
         preparePotentialParent = False
         Try
@@ -931,7 +968,7 @@ Public Class frmRestore
                             keyField.label = strLabel
                             keyField.fid = strFID
                             keyFID = keyField.fid
-                        Exit While
+                            Exit While
                         End If
                     End While
                     quNectCmd.Dispose()
@@ -956,7 +993,7 @@ Public Class frmRestore
                 End If
             End Using
         Catch ex As Exception
-            MsgBox("Could Not prepare potential parent " & dbid & " " & ex.Message)
+            MsgBox("Could not prepare potential parent " & dbid & " " & ex.Message)
         End Try
     End Function
     Function listFieldsAndReturnKeyFID(dbid As String) As String
@@ -1115,11 +1152,15 @@ Public Class frmRestore
         End If
     End Sub
 
-
+    Function tableNameToDBID(tableName As String) As String
+        Dim getDBIDfromdbName As New Regex("([a-z0-9~]+)$", RegexOptions.IgnoreCase Or RegexOptions.Compiled)
+        Dim dbidMatch As Match = getDBIDfromdbName.Match(tableName)
+        tableNameToDBID = dbidMatch.Value
+    End Function
     Private Sub btnImport_Click(sender As Object, e As EventArgs) Handles btnImport.Click
         If cmbBulkorSingle.SelectedIndex = 2 Then
             Dim strFolder As String = lblFile.Text
-            Dim tableNameToKeyFID As New Dictionary(Of String, String)
+            Dim dbidToKeyFID As New Dictionary(Of String, String)
             Try
                 Dim tableCounter As Integer = 0
                 'import a whole directory
@@ -1128,18 +1169,19 @@ Public Class frmRestore
                 Dim fiArr As FileInfo() = di.GetFiles("*.csv", SearchOption.AllDirectories)
                 ' Display the names of the files.
                 Dim fri As FileInfo
-                Dim restoredTableNames As New ArrayList
+                Dim restoredDBIDs As New ArrayList
                 For Each fri In fiArr
                     Dim tableName As String = Regex.Replace(fri.FullName, "\.csv$", "")
                     If Not System.IO.File.Exists(tableName & ".fids") Then
                         Continue For
                     End If
                     tableName = Regex.Replace(fri.Name, "\.csv$", "")
-                    restoredTableNames.Add(tableName)
+                    Dim dbid As String = tableNameToDBID(tableName)
+                    restoredDBIDs.Add(dbid)
                     lblFile.Text = fri.FullName
                     lblTable.Text = tableName
                     Dim keyfid As String = listFieldsAndReturnKeyFID(tableName)
-                    tableNameToKeyFID.Add(tableName, keyfid)
+                    dbidToKeyFID.Add(dbid, keyfid)
                     restoreTable(False, False, True)
                     tableCounter += 1
                 Next fri
@@ -1148,8 +1190,11 @@ Public Class frmRestore
                 Dim connectionString As String = getConnectionString(False, False)
                 Using connection As OdbcConnection = getquNectConn(connectionString)
                     If connection Is Nothing Then Exit Sub
-                    For Each tableName As String In restoredTableNames
-                        Dim strSQL As String = "select fid, mastag from """ & tableName & "~fields"" where mastag <> ''"
+                    For Each dbid As String In restoredDBIDs
+                        If dbidToKeyFID(dbid) <> "3" Then
+                            Continue For
+                        End If
+                        Dim strSQL As String = "select fid, mastag from """ & dbid & "~fields"" where mastag <> ''"
                         Using quNectCmd As OdbcCommand = New OdbcCommand(strSQL, connection)
                             Dim dr As OdbcDataReader = quNectCmd.ExecuteReader()
                             If Not dr.HasRows Then
@@ -1157,7 +1202,7 @@ Public Class frmRestore
                                 Continue For
                             End If
                             Dim aliasToDBID As New Dictionary(Of String, String)
-                            Using quNectAliasesCmd As OdbcCommand = New OdbcCommand("select * from """ & tableName & "~aliases""", connection)
+                            Using quNectAliasesCmd As OdbcCommand = New OdbcCommand("select * from """ & dbid & "~aliases""", connection)
                                 Dim drAliases As OdbcDataReader = quNectAliasesCmd.ExecuteReader()
                                 While (drAliases.Read())
                                     aliasToDBID.Add(drAliases.GetString(0), drAliases.GetString(1))
@@ -1168,7 +1213,7 @@ Public Class frmRestore
                                 Dim referenceFID As String = dr.GetString(0)
                                 Dim mastag As String = dr.GetString(1).ToLower()
                                 Dim parentDBID As String = aliasToDBID(mastag)
-                                Dim strReMapSQL As String = "INSERT INTO """ & tableName & """ (""" & tableName & """.fid" & tableNameToKeyFID(tableName) & ", """ & tableName & """.fid" & referenceFID & ") SELECT """ & tableName & """.fid" & tableNameToKeyFID(tableName) & ", " & parentDBID & ".fid3 FROM " & parentDBID & " INNER JOIN """ & tableName & """  ON " & parentDBID & ".""QuNect Restore Temporary Record ID#"" = """ & tableName & """.fid" & referenceFID
+                                Dim strReMapSQL As String = "INSERT INTO """ & dbid & """ (""" & dbid & """.fid" & dbidToKeyFID(dbid) & ", """ & dbid & """.fid" & referenceFID & ") SELECT """ & dbid & """.fid" & dbidToKeyFID(dbid) & ", " & parentDBID & ".fid3 FROM " & parentDBID & " INNER JOIN """ & dbid & """  ON " & parentDBID & ".""QuNect Restore Temporary Record ID#"" = """ & dbid & """.fid" & referenceFID & " WHERE " & parentDBID & ".""QuNect Restore Temporary Record ID#"" IS NOT NULL"
                                 Using reMapConnection As OdbcConnection = getquNectConn(connectionString)
                                     If connection Is Nothing Then Exit Sub
                                     Using quNectReMapCmd As OdbcCommand = New OdbcCommand(strReMapSQL, reMapConnection)
@@ -1182,8 +1227,22 @@ Public Class frmRestore
                         End Using
                     Next
                     connection.Close()
-                    MsgBox("Restored " & tableCounter & " tables.", MsgBoxStyle.OkOnly, AppName)
+
                 End Using
+                For Each dbid As String In restoredDBIDs
+                    If dbidToKeyFID(dbid) <> "3" Then
+                        Continue For
+                    End If
+                    Using updateConnection As OdbcConnection = getquNectConn(connectionString)
+                        Dim strSQL = "UPDATE " & dbid & " SET ""QuNect Restore Temporary Record ID#"" = NULL"
+                        Using quNectUpdateCmd As OdbcCommand = New OdbcCommand(strSQL, updateConnection)
+                            quNectUpdateCmd.ExecuteNonQuery()
+                            quNectUpdateCmd.Dispose()
+                        End Using
+                        updateConnection.Close()
+                    End Using
+                Next
+                MsgBox("Restored " & tableCounter & " tables.", MsgBoxStyle.OkOnly, AppName)
             Catch ex As Exception
                 MsgBox("Could not import." & ex.Message, MsgBoxStyle.OkOnly, AppName)
             Finally
