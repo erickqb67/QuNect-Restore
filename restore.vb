@@ -1,4 +1,4 @@
-Imports System.Data.Odbc
+﻿Imports System.Data.Odbc
 Imports System.Text.RegularExpressions
 Imports System
 Imports System.IO
@@ -56,7 +56,7 @@ Public Class frmRestore
         malformed
     End Enum
     Private Sub restore_Load(sender As Object, e As EventArgs) Handles Me.Load
-        Text = "QuNect Restore 1.0.0.16" ' & ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString
+        Text = "QuNect Restore 1.0.0.18" ' & ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString
         txtUsername.Text = GetSetting(AppName, "Credentials", "username")
         cmbPassword.SelectedIndex = CInt(GetSetting(AppName, "Credentials", "passwordOrToken", "0"))
         txtPassword.Text = GetSetting(AppName, "Credentials", "password")
@@ -149,25 +149,13 @@ Public Class frmRestore
         Dim dsPreview As New DataSet
         Dim dtPreview As New DataTable
         Dim drPreview As DataRow = Nothing
-
+        Dim m As Match = Regex.Match(lblFile.Text, "\.csv$", RegexOptions.IgnoreCase)
+        If Not m.Success Then
+            MsgBox("Cannot restore from a non CSV file: " & lblFile.Text, MsgBoxStyle.OkOnly, AppName)
+            restoreTable = False
+            Exit Function
+        End If
         Dim dbid As String = Regex.Replace(lblTable.Text, "^.* ", "")
-
-        'here we're going to have a problem because this record no longer exists in QuickBase
-        'we could update all the child tables with the newly minted Record ID#s
-        'but we wouid have to do one record at a time to accomplish this
-        'or we could create a copy of the Record ID# field by creating a number field called "QuNect Restore Temporary Record ID#" using the following SQL:
-        'ALTER TABLE bcmwcpqbv add "QuNect Restore Temporary Record ID#" DOUBLE
-        'Then we copy the Record ID# values from the built-in Record ID# field to the "QuNect Restore Temporary Record ID#" using the following SQL:
-        'UPDATE bcmwcpqbv SET "QuNect Restore Temporary Record ID#" = fid3
-        'then we make "QuNect Restore Temporary Record ID#" the key field using this SQL:
-        'ALTER TABLE bcmwcpqbv ADD CONSTRAINT PK_Temp PRIMARY KEY ("QuNect Restore Temporary Record ID#")
-        'Now when we insert records from a backup we map fid3 to this new field "QuNect Restore Temporary Record ID#"
-        'Now we don't have to worry about missing Record ID# values.
-        'After restoring all our records we switch the key field back to the Record ID# field.
-        'ALTER TABLE bcmwcpqbv ADD CONSTRAINT PK_Temp PRIMARY KEY ("Record ID#")
-        'Now we have a mapping from the old Record ID#s to the new Record ID#s. 
-        'To connect child records back up to their parents we go back over all the tables and if there is a foreign key field that points to one of our restored tables we run the following SQL:
-        'INSERT INTO childdbid (childdbid.keyField, childdbid.referencefield) SELECT childdbid.keyField, parentdbid.fid3 FROM parentdbid INNER JOIN childdbid ON parentdbid."QuNect Restore Temporary Record ID#" = childdbid.referencefield
 
         Dim BuiltInRecordIDisKey As Boolean = False
         If Not checkForErrorsOnly Then
@@ -500,7 +488,7 @@ Public Class frmRestore
         qdbVer.year = CInt(m.Groups(1).Value)
         qdbVer.major = CInt(m.Groups(2).Value)
         qdbVer.minor = CInt(m.Groups(3).Value)
-        If (qdbVer.major < 7) Or (qdbVer.major = 7 And qdbVer.minor < 63) Then
+        If (qdbVer.major < 7) Or (qdbVer.major = 7 And qdbVer.minor < 84) Then
             MsgBox("You are running the " & ver & " version of QuNect ODBC for QuickBase. Please install the latest version from http://qunect.com/download/QuNect.exe")
             quNectConn.Close()
             Me.Cursor = Cursors.Default
@@ -996,7 +984,7 @@ Public Class frmRestore
             MsgBox("Could not prepare potential parent " & dbid & " " & ex.Message)
         End Try
     End Function
-    Function listFieldsAndReturnKeyFID(dbid As String) As String
+    Function listFieldsAndReturnKeyFID(dbid As String, bulkRestore As Boolean) As String
         listFieldsAndReturnKeyFID = ""
         sourceLabelToFieldType = New Dictionary(Of String, String)
         destinationLabelsToFids = New Dictionary(Of String, String)
@@ -1057,6 +1045,9 @@ Public Class frmRestore
                     field.parentFieldID = dr.GetString(3)
                     field.unique = dr.GetBoolean(4)
                     field.required = dr.GetBoolean(5)
+                    If fidToLabel.ContainsKey(field.fid) Then
+                        Throw New System.Exception("Duplicate fid '" & field.fid & "' in " & dbid)
+                    End If
                     fidToLabel.Add(field.fid, field.label)
                     If field.parentFieldID <> "" Then
                         field.label = fidToLabel(field.parentFieldID) & ": " & field.label
@@ -1069,7 +1060,13 @@ Public Class frmRestore
                     If Not IsDBNull(dr(8)) Then
                         field.decimal_places = dr.GetInt32(8)
                     End If
+                    If fieldNodes.ContainsKey(field.fid) Then
+                        Throw New System.Exception("Duplicate fid '" & field.fid & "' in " & dbid)
+                    End If
                     fieldNodes.Add(field.fid, field)
+                    If destinationLabelsToFids.ContainsKey(field.label) Then
+                        Throw New System.Exception("Duplicate field label '" & field.label & "' in CSV file for " & dbid)
+                    End If
                     destinationLabelsToFids.Add(field.label, field.fid)
                     DirectCast(dgMapping.Columns(mapping.destination), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Add(field.label)
                 End While
@@ -1094,6 +1091,9 @@ Public Class frmRestore
                             End If
                             If sourceFieldName = "" Then Continue For
                             dgMapping.Rows.Add(New String() {sourceFieldName})
+                            If sourceFieldNames.ContainsKey(sourceFieldName) Then
+                                Throw New System.Exception("Duplicate sourceFieldName '" & sourceFieldName & "' in " & dbid)
+                            End If
                             sourceFieldNames.Add(sourceFieldName, i)
                             DirectCast(dgCriteria.Columns(filter.source), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Add(sourceFieldName)
                             guessDestination(clist, sourceFieldName, i)
@@ -1101,17 +1101,19 @@ Public Class frmRestore
                         Next
 
                     Catch ex As Microsoft.VisualBasic.FileIO.MalformedLineException
-                        MsgBox("First line of file is malformed, cannot display field names.")
+                        MsgBox("First line Of file Is malformed, cannot display field names.")
 
                     End Try
                 End If
             End Using
+            If Not bulkRestore Then
+                btnImport.Visible = True
+                btnPreview.Visible = True
+                dgMapping.Visible = True
+                dgCriteria.Visible = True
+                Me.Cursor = Cursors.Default
+            End If
 
-            btnImport.Visible = True
-            btnPreview.Visible = True
-            dgMapping.Visible = True
-            dgCriteria.Visible = True
-            Me.Cursor = Cursors.Default
         Catch ex As Exception
             MsgBox(ex.Message)
         End Try
@@ -1159,6 +1161,10 @@ Public Class frmRestore
     End Function
     Private Sub btnImport_Click(sender As Object, e As EventArgs) Handles btnImport.Click
         If cmbBulkorSingle.SelectedIndex = 2 Then
+            Me.Cursor = Cursors.WaitCursor
+            btnSource.Enabled = False
+            cmbBulkorSingle.Enabled = False
+            Application.DoEvents()
             Dim strFolder As String = lblFile.Text
             Dim dbidToKeyFID As New Dictionary(Of String, String)
             Try
@@ -1171,6 +1177,8 @@ Public Class frmRestore
                 Dim fri As FileInfo
                 Dim restoredDBIDs As New ArrayList
                 For Each fri In fiArr
+                    Me.Cursor = Cursors.WaitCursor
+                    Application.DoEvents()
                     Dim tableName As String = Regex.Replace(fri.FullName, "\.csv$", "")
                     If Not System.IO.File.Exists(tableName & ".fids") Then
                         Continue For
@@ -1180,7 +1188,7 @@ Public Class frmRestore
                     restoredDBIDs.Add(dbid)
                     lblFile.Text = fri.FullName
                     lblTable.Text = tableName
-                    Dim keyfid As String = listFieldsAndReturnKeyFID(tableName)
+                    Dim keyfid As String = listFieldsAndReturnKeyFID(tableName, True)
                     dbidToKeyFID.Add(dbid, keyfid)
                     restoreTable(False, False, True)
                     tableCounter += 1
@@ -1191,9 +1199,7 @@ Public Class frmRestore
                 Using connection As OdbcConnection = getquNectConn(connectionString)
                     If connection Is Nothing Then Exit Sub
                     For Each dbid As String In restoredDBIDs
-                        If dbidToKeyFID(dbid) <> "3" Then
-                            Continue For
-                        End If
+                        Application.DoEvents()
                         Dim strSQL As String = "select fid, mastag from """ & dbid & "~fields"" where mastag <> ''"
                         Using quNectCmd As OdbcCommand = New OdbcCommand(strSQL, connection)
                             Dim dr As OdbcDataReader = quNectCmd.ExecuteReader()
@@ -1210,9 +1216,13 @@ Public Class frmRestore
                                 quNectAliasesCmd.Dispose()
                             End Using
                             While (dr.Read())
+                                Application.DoEvents()
                                 Dim referenceFID As String = dr.GetString(0)
                                 Dim mastag As String = dr.GetString(1).ToLower()
                                 Dim parentDBID As String = aliasToDBID(mastag)
+                                If Not dbidToKeyFID.ContainsKey(parentDBID) Or dbidToKeyFID(parentDBID) <> "3" Then
+                                    Continue While
+                                End If
                                 Dim strReMapSQL As String = "INSERT INTO """ & dbid & """ (""" & dbid & """.fid" & dbidToKeyFID(dbid) & ", """ & dbid & """.fid" & referenceFID & ") SELECT """ & dbid & """.fid" & dbidToKeyFID(dbid) & ", " & parentDBID & ".fid3 FROM " & parentDBID & " INNER JOIN """ & dbid & """  ON " & parentDBID & ".""QuNect Restore Temporary Record ID#"" = """ & dbid & """.fid" & referenceFID & " WHERE " & parentDBID & ".""QuNect Restore Temporary Record ID#"" IS NOT NULL"
                                 Using reMapConnection As OdbcConnection = getquNectConn(connectionString)
                                     If connection Is Nothing Then Exit Sub
@@ -1230,6 +1240,7 @@ Public Class frmRestore
 
                 End Using
                 For Each dbid As String In restoredDBIDs
+                    Application.DoEvents()
                     If dbidToKeyFID(dbid) <> "3" Then
                         Continue For
                     End If
@@ -1242,11 +1253,18 @@ Public Class frmRestore
                         updateConnection.Close()
                     End Using
                 Next
+                Me.Cursor = Cursors.Default
                 MsgBox("Restored " & tableCounter & " tables.", MsgBoxStyle.OkOnly, AppName)
             Catch ex As Exception
+                Me.Cursor = Cursors.Default
                 MsgBox("Could not import." & ex.Message, MsgBoxStyle.OkOnly, AppName)
             Finally
+                Me.Cursor = Cursors.Default
                 lblFile.Text = strFolder
+                hideButtons()
+                btnSource.Enabled = True
+                cmbBulkorSingle.Enabled = True
+
             End Try
 
         ElseIf restoreTable(True, False, False) Then
@@ -1264,7 +1282,7 @@ Public Class frmRestore
             Me.Cursor = Cursors.Default
             Exit Sub
         End If
-        listFieldsAndReturnKeyFID(lblTable.Text)
+        listFieldsAndReturnKeyFID(lblTable.Text, False)
     End Sub
 
 
@@ -1274,11 +1292,13 @@ Public Class frmRestore
     Private Sub lblTable_TextChanged(sender As Object, e As EventArgs) Handles lblTable.TextChanged
         SaveSetting(AppName, "config", "table", lblTable.Text)
         btnImport.Visible = False
+        btnPreview.Visible = False
     End Sub
 
     Private Sub lblFile_TextChanged(sender As Object, e As EventArgs) Handles lblFile.TextChanged
         SaveSetting(AppName, "config", "file", lblFile.Text)
         btnImport.Visible = False
+        btnPreview.Visible = False
     End Sub
 
     Private Sub dgCriteria_CellEnter(sender As Object, e As DataGridViewCellEventArgs) Handles dgCriteria.CellEnter
