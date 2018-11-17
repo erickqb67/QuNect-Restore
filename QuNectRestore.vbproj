@@ -23,12 +23,12 @@
     <UpdatePeriodically>false</UpdatePeriodically>
     <UpdateRequired>false</UpdateRequired>
     <MapFileExtensions>true</MapFileExtensions>
-    <InstallUrl>https://www.qunect.com/download/QuNectRestore/</InstallUrl>
+    <InstallUrl>https://qunect.com/download/QuNectRestore/</InstallUrl>
     <SupportUrl>http://www.qunect.com</SupportUrl>
     <ErrorReportUrl>http://www.qunect.com</ErrorReportUrl>
     <ProductName>QuNect Restore</ProductName>
     <PublisherName>QuNect</PublisherName>
-    <ApplicationRevision>18</ApplicationRevision>
+    <ApplicationRevision>27</ApplicationRevision>
     <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
     <UseApplicationTrust>false</UseApplicationTrust>
     <PublishWizardCompleted>true</PublishWizardCompleted>

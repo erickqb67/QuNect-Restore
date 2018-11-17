@@ -41,7 +41,6 @@ Partial Class frmRestore
         Me.lblTable = New System.Windows.Forms.Label()
         Me.lblFile = New System.Windows.Forms.Label()
         Me.ckbDetectProxy = New System.Windows.Forms.CheckBox()
-        Me.btnListFields = New System.Windows.Forms.Button()
         Me.chkBxHeaders = New System.Windows.Forms.CheckBox()
         Me.dtPicker = New System.Windows.Forms.DateTimePicker()
         Me.dgCriteria = New System.Windows.Forms.DataGridView()
@@ -130,6 +129,7 @@ Partial Class frmRestore
         Me.lblAppToken.Size = New System.Drawing.Size(148, 13)
         Me.lblAppToken.TabIndex = 30
         Me.lblAppToken.Text = "QuickBase Application Token"
+        Me.lblAppToken.Visible = False
         '
         'txtAppToken
         '
@@ -137,6 +137,7 @@ Partial Class frmRestore
         Me.txtAppToken.Name = "txtAppToken"
         Me.txtAppToken.Size = New System.Drawing.Size(258, 20)
         Me.txtAppToken.TabIndex = 29
+        Me.txtAppToken.Visible = False
         '
         'lblServer
         '
@@ -204,19 +205,10 @@ Partial Class frmRestore
         Me.ckbDetectProxy.Text = "Automatically detect proxy settings"
         Me.ckbDetectProxy.UseVisualStyleBackColor = True
         '
-        'btnListFields
-        '
-        Me.btnListFields.Location = New System.Drawing.Point(606, 176)
-        Me.btnListFields.Name = "btnListFields"
-        Me.btnListFields.Size = New System.Drawing.Size(82, 27)
-        Me.btnListFields.TabIndex = 37
-        Me.btnListFields.Text = "List Fields"
-        Me.btnListFields.UseVisualStyleBackColor = True
-        '
         'chkBxHeaders
         '
         Me.chkBxHeaders.AutoSize = True
-        Me.chkBxHeaders.Location = New System.Drawing.Point(12, 207)
+        Me.chkBxHeaders.Location = New System.Drawing.Point(969, 148)
         Me.chkBxHeaders.Name = "chkBxHeaders"
         Me.chkBxHeaders.Size = New System.Drawing.Size(137, 17)
         Me.chkBxHeaders.TabIndex = 38
@@ -305,6 +297,7 @@ Partial Class frmRestore
         Me.cmbBulkorSingle.Name = "cmbBulkorSingle"
         Me.cmbBulkorSingle.Size = New System.Drawing.Size(375, 21)
         Me.cmbBulkorSingle.TabIndex = 45
+        Me.cmbBulkorSingle.Visible = False
         '
         'frmRestore
         '
@@ -319,7 +312,6 @@ Partial Class frmRestore
         Me.Controls.Add(Me.dgCriteria)
         Me.Controls.Add(Me.dtPicker)
         Me.Controls.Add(Me.chkBxHeaders)
-        Me.Controls.Add(Me.btnListFields)
         Me.Controls.Add(Me.ckbDetectProxy)
         Me.Controls.Add(Me.lblFile)
         Me.Controls.Add(Me.lblTable)
@@ -360,7 +352,6 @@ Partial Class frmRestore
     Friend WithEvents lblTable As System.Windows.Forms.Label
     Friend WithEvents lblFile As System.Windows.Forms.Label
     Friend WithEvents ckbDetectProxy As System.Windows.Forms.CheckBox
-    Friend WithEvents btnListFields As System.Windows.Forms.Button
     Friend WithEvents chkBxHeaders As System.Windows.Forms.CheckBox
     Friend WithEvents dtPicker As DateTimePicker
     Friend WithEvents dgCriteria As DataGridView

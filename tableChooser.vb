@@ -9,7 +9,7 @@
             Exit Sub
         End If
         frmRestore.lblTable.Text = tvAppsTables.SelectedNode.FullPath()
-        hideButtons()
+
         Me.Hide()
     End Sub
     Private Sub tvAppsTables_Click(sender As Object, e As EventArgs) Handles tvAppsTables.Click
@@ -20,7 +20,7 @@
             Exit Sub
         End If
         frmRestore.lblTable.Text = tvAppsTables.SelectedNode.FullPath()
-        hideButtons()
+
     End Sub
 
     Private Sub btnDone_Click(sender As Object, e As EventArgs) Handles btnDone.Click
@@ -34,13 +34,7 @@
         Else
             frmRestore.lblTable.Text = tvAppsTables.SelectedNode.FullPath()
         End If
-        hideButtons()
         Me.Hide()
     End Sub
-    Private Sub hideButtons()
-        frmRestore.btnPreview.Visible = False
-        frmRestore.btnImport.Visible = False
-        frmRestore.dgCriteria.Visible = False
-        frmRestore.dgMapping.Visible = False
-    End Sub
+
 End Class
