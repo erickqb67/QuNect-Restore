@@ -56,7 +56,7 @@ Public Class frmRestore
         malformed
     End Enum
     Private Sub restore_Load(sender As Object, e As EventArgs) Handles Me.Load
-        Text = "QuNect Restore 1.0.0.26" ' & ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString
+        Text = "QuNect Restore 1.0.0.27" ' & ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString
         txtUsername.Text = GetSetting(AppName, "Credentials", "username")
         cmbPassword.SelectedIndex = CInt(GetSetting(AppName, "Credentials", "passwordOrToken", "0"))
         txtPassword.Text = GetSetting(AppName, "Credentials", "password")
@@ -808,11 +808,11 @@ Public Class frmRestore
         lblAppToken.Visible = txtAppToken.Visible
         btnListTables.Visible = txtUsername.Text.Length > 0 And cmbPassword.SelectedIndex > 0 And txtPassword.Text.Length > 0 And txtServer.Text.Length > 0 And cmbBulkorSingle.SelectedIndex = 1 And lblFile.Text.Length > 0
         lblTable.Visible = btnListTables.Visible
-        btnSource.Visible = cmbBulkorSingle.SelectedIndex > 0
-        lblFile.Visible = cmbBulkorSingle.SelectedIndex > 0
+        btnSource.Visible = cmbBulkorSingle.Visible And cmbBulkorSingle.SelectedIndex > 0
+        lblFile.Visible = cmbBulkorSingle.Visible And cmbBulkorSingle.SelectedIndex > 0
         chkBxHeaders.Visible = lblFile.Visible And lblFile.Text.Length > 0
-        btnPreview.Visible = cmbBulkorSingle.SelectedIndex = 1 And lblTable.Text.Length > 0
-        btnImport.Visible = btnPreview.Visible Or (cmbBulkorSingle.SelectedIndex > 1 And lblTable.Text.Length > 0)
+        btnPreview.Visible = cmbBulkorSingle.Visible And cmbBulkorSingle.SelectedIndex = 1 And lblTable.Text.Length > 0
+        btnImport.Visible = cmbBulkorSingle.Visible And ((cmbBulkorSingle.SelectedIndex > 1 And lblTable.Text.Length > 0) Or btnPreview.Visible)
         dgCriteria.Visible = btnPreview.Visible
         dgMapping.Visible = btnPreview.Visible
         If cmbBulkorSingle.SelectedIndex = 1 Then
