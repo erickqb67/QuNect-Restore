@@ -56,7 +56,7 @@ Public Class frmRestore
         malformed
     End Enum
     Private Sub restore_Load(sender As Object, e As EventArgs) Handles Me.Load
-        Text = "QuNect Restore 1.0.0.28" ' & ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString
+        Text = "QuNect Restore 1.0.0.29" ' & ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString
         txtUsername.Text = GetSetting(AppName, "Credentials", "username")
         cmbPassword.SelectedIndex = CInt(GetSetting(AppName, "Credentials", "passwordOrToken", "0"))
         txtPassword.Text = GetSetting(AppName, "Credentials", "password")
@@ -832,6 +832,9 @@ Public Class frmRestore
     End Sub
     Private Sub cmbPassword_SelectedIndexChanged(sender As Object, e As EventArgs) Handles cmbPassword.SelectedIndexChanged
         SaveSetting(AppName, "Credentials", "passwordOrToken", cmbPassword.SelectedIndex)
+        If lblTable.Text.Length > 0 And cmbBulkorSingle.SelectedIndex = 1 Then
+            listFieldsAndReturnKeyFID(lblTable.Text, False)
+        End If
         showHideControls()
     End Sub
     Private Sub txtPassword_TextChanged(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles txtPassword.TextChanged
