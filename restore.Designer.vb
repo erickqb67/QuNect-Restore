@@ -53,6 +53,8 @@ Partial Class frmRestore
         Me.cmbPassword = New System.Windows.Forms.ComboBox()
         Me.cmbBulkorSingle = New System.Windows.Forms.ComboBox()
         Me.FolderBrowserDialog = New System.Windows.Forms.FolderBrowserDialog()
+        Me.btnAppToken = New System.Windows.Forms.Button()
+        Me.btnUserToken = New System.Windows.Forms.Button()
         CType(Me.dgMapping, System.ComponentModel.ISupportInitialize).BeginInit()
         CType(Me.dgCriteria, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.SuspendLayout()
@@ -142,7 +144,7 @@ Partial Class frmRestore
         'lblServer
         '
         Me.lblServer.AutoSize = True
-        Me.lblServer.Location = New System.Drawing.Point(460, 19)
+        Me.lblServer.Location = New System.Drawing.Point(654, 18)
         Me.lblServer.Name = "lblServer"
         Me.lblServer.Size = New System.Drawing.Size(93, 13)
         Me.lblServer.TabIndex = 28
@@ -150,17 +152,17 @@ Partial Class frmRestore
         '
         'txtServer
         '
-        Me.txtServer.Location = New System.Drawing.Point(457, 38)
+        Me.txtServer.Location = New System.Drawing.Point(651, 37)
         Me.txtServer.Name = "txtServer"
         Me.txtServer.Size = New System.Drawing.Size(237, 20)
         Me.txtServer.TabIndex = 27
         '
         'txtPassword
         '
-        Me.txtPassword.Location = New System.Drawing.Point(243, 37)
+        Me.txtPassword.Location = New System.Drawing.Point(349, 37)
         Me.txtPassword.Name = "txtPassword"
         Me.txtPassword.PasswordChar = Global.Microsoft.VisualBasic.ChrW(42)
-        Me.txtPassword.Size = New System.Drawing.Size(202, 20)
+        Me.txtPassword.Size = New System.Drawing.Size(273, 20)
         Me.txtPassword.TabIndex = 25
         '
         'lblUsername
@@ -176,7 +178,7 @@ Partial Class frmRestore
         '
         Me.txtUsername.Location = New System.Drawing.Point(12, 37)
         Me.txtUsername.Name = "txtUsername"
-        Me.txtUsername.Size = New System.Drawing.Size(213, 20)
+        Me.txtUsername.Size = New System.Drawing.Size(321, 20)
         Me.txtUsername.TabIndex = 23
         '
         'lblTable
@@ -198,7 +200,7 @@ Partial Class frmRestore
         'ckbDetectProxy
         '
         Me.ckbDetectProxy.AutoSize = True
-        Me.ckbDetectProxy.Location = New System.Drawing.Point(727, 41)
+        Me.ckbDetectProxy.Location = New System.Drawing.Point(906, 40)
         Me.ckbDetectProxy.Name = "ckbDetectProxy"
         Me.ckbDetectProxy.Size = New System.Drawing.Size(188, 17)
         Me.ckbDetectProxy.TabIndex = 36
@@ -283,9 +285,9 @@ Partial Class frmRestore
         Me.cmbPassword.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList
         Me.cmbPassword.FormattingEnabled = True
         Me.cmbPassword.Items.AddRange(New Object() {"Please choose...", "QuickBase Password", "QuickBase User Token"})
-        Me.cmbPassword.Location = New System.Drawing.Point(242, 12)
+        Me.cmbPassword.Location = New System.Drawing.Point(348, 12)
         Me.cmbPassword.Name = "cmbPassword"
-        Me.cmbPassword.Size = New System.Drawing.Size(203, 21)
+        Me.cmbPassword.Size = New System.Drawing.Size(274, 21)
         Me.cmbPassword.TabIndex = 44
         '
         'cmbBulkorSingle
@@ -299,11 +301,31 @@ Partial Class frmRestore
         Me.cmbBulkorSingle.TabIndex = 45
         Me.cmbBulkorSingle.Visible = False
         '
+        'btnAppToken
+        '
+        Me.btnAppToken.Location = New System.Drawing.Point(169, 60)
+        Me.btnAppToken.Name = "btnAppToken"
+        Me.btnAppToken.Size = New System.Drawing.Size(19, 20)
+        Me.btnAppToken.TabIndex = 81
+        Me.btnAppToken.Text = "?"
+        Me.btnAppToken.UseVisualStyleBackColor = True
+        '
+        'btnUserToken
+        '
+        Me.btnUserToken.Location = New System.Drawing.Point(623, 12)
+        Me.btnUserToken.Name = "btnUserToken"
+        Me.btnUserToken.Size = New System.Drawing.Size(19, 20)
+        Me.btnUserToken.TabIndex = 82
+        Me.btnUserToken.Text = "?"
+        Me.btnUserToken.UseVisualStyleBackColor = True
+        '
         'frmRestore
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.ClientSize = New System.Drawing.Size(1128, 924)
+        Me.Controls.Add(Me.btnUserToken)
+        Me.Controls.Add(Me.btnAppToken)
         Me.Controls.Add(Me.cmbBulkorSingle)
         Me.Controls.Add(Me.cmbPassword)
         Me.Controls.Add(Me.lblMode)
@@ -366,4 +388,6 @@ Partial Class frmRestore
     Friend WithEvents cmbPassword As ComboBox
     Friend WithEvents cmbBulkorSingle As ComboBox
     Friend WithEvents FolderBrowserDialog As FolderBrowserDialog
+    Friend WithEvents btnAppToken As Button
+    Friend WithEvents btnUserToken As Button
 End Class

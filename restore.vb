@@ -56,7 +56,7 @@ Public Class frmRestore
         malformed
     End Enum
     Private Sub restore_Load(sender As Object, e As EventArgs) Handles Me.Load
-        Text = "QuNect Restore 1.0.0.27" ' & ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString
+        Text = "QuNect Restore 1.0.0.28" ' & ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString
         txtUsername.Text = GetSetting(AppName, "Credentials", "username")
         cmbPassword.SelectedIndex = CInt(GetSetting(AppName, "Credentials", "passwordOrToken", "0"))
         txtPassword.Text = GetSetting(AppName, "Credentials", "password")
@@ -806,6 +806,8 @@ Public Class frmRestore
         cmbBulkorSingle.Visible = txtUsername.Text.Length > 0 And cmbPassword.SelectedIndex > 0 And txtPassword.Text.Length > 0 And txtServer.Text.Length > 0
         txtAppToken.Visible = txtUsername.Text.Length > 0 And cmbPassword.SelectedIndex = 1 And txtPassword.Text.Length > 0 And txtServer.Text.Length > 0
         lblAppToken.Visible = txtAppToken.Visible
+        btnAppToken.Visible = txtAppToken.Visible
+        btnUserToken.Visible = txtUsername.Text.Length > 0 And cmbPassword.SelectedIndex = 2
         btnListTables.Visible = txtUsername.Text.Length > 0 And cmbPassword.SelectedIndex > 0 And txtPassword.Text.Length > 0 And txtServer.Text.Length > 0 And cmbBulkorSingle.SelectedIndex = 1 And lblFile.Text.Length > 0
         lblTable.Visible = btnListTables.Visible
         btnSource.Visible = cmbBulkorSingle.Visible And cmbBulkorSingle.SelectedIndex > 0
@@ -1387,9 +1389,13 @@ Public Class frmRestore
     End Sub
 
 
+    Private Sub btnAppToken_Click(sender As Object, e As EventArgs) Handles btnAppToken.Click
+        Process.Start("https://qunect.com/flash/AppToken.html")
+    End Sub
 
-
-
+    Private Sub btnUserToken_Click(sender As Object, e As EventArgs) Handles btnUserToken.Click
+        Process.Start("https://qunect.com/flash/UserToken.html")
+    End Sub
 
 
 End Class
