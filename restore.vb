@@ -56,7 +56,7 @@ Public Class frmRestore
         malformed
     End Enum
     Private Sub restore_Load(sender As Object, e As EventArgs) Handles Me.Load
-        Text = "QuNect Restore 1.0.0.30" ' & ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString
+        Text = "QuNect Restore 1.0.0.33" ' & ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString
         txtUsername.Text = GetSetting(AppName, "Credentials", "username")
         cmbPassword.SelectedIndex = CInt(GetSetting(AppName, "Credentials", "passwordOrToken", "0"))
         txtPassword.Text = GetSetting(AppName, "Credentials", "password")
@@ -1262,7 +1262,7 @@ Public Class frmRestore
                                 Dim mastag As String = dr.GetString(1).ToLower()
                                 If Not aliasToDBID.ContainsKey(mastag) Then Continue While
                                 Dim parentDBID As String = aliasToDBID(mastag)
-                                If Not dbidToKeyFID.ContainsKey(parentDBID) Or dbidToKeyFID(parentDBID) <> "3" Then
+                                If Not dbidToKeyFID.ContainsKey(parentDBID) OrElse dbidToKeyFID(parentDBID) <> "3" Then
                                     Continue While
                                 End If
                                 Dim strReMapSQL As String = "INSERT INTO """ & dbid & """ (""" & dbid & """.fid" & dbidToKeyFID(dbid) & ", """ & dbid & """.fid" & referenceFID & ") SELECT """ & dbid & """.fid" & dbidToKeyFID(dbid) & ", " & parentDBID & ".fid3 FROM " & parentDBID & " INNER JOIN """ & dbid & """  ON " & parentDBID & ".""QuNect Restore Temporary Record ID#"" = """ & dbid & """.fid" & referenceFID & " WHERE " & parentDBID & ".""QuNect Restore Temporary Record ID#"" IS NOT NULL"
