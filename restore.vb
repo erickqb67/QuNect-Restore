@@ -56,7 +56,7 @@ Public Class frmRestore
         malformed
     End Enum
     Private Sub restore_Load(sender As Object, e As EventArgs) Handles Me.Load
-        Text = "QuNect Restore 1.0.0.33" ' & ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString
+        Text = "QuNect Restore 1.0.0.34" ' & ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString
         txtUsername.Text = GetSetting(AppName, "Credentials", "username")
         cmbPassword.SelectedIndex = CInt(GetSetting(AppName, "Credentials", "passwordOrToken", "0"))
         txtPassword.Text = GetSetting(AppName, "Credentials", "password")
@@ -106,6 +106,9 @@ Public Class frmRestore
 #If DEBUG Then
         'connectionString &= ";LOGSQL=1;LOGAPI=1"
 #End If
+        If lblDebug.Visible Then
+            connectionString &= ";LOGSQL=1"
+        End If
         Return connectionString
     End Function
     Private Function getHashSetofFieldValues(dbid As String, fid As String) As HashSet(Of String)
@@ -1281,20 +1284,22 @@ Public Class frmRestore
                     connection.Close()
 
                 End Using
-                For Each dbid As String In restoredDBIDs
-                    Application.DoEvents()
-                    If dbidToKeyFID(dbid) <> "3" Then
-                        Continue For
-                    End If
-                    Using updateConnection As OdbcConnection = getquNectConn(connectionString)
-                        Dim strSQL = "UPDATE " & dbid & " SET ""QuNect Restore Temporary Record ID#"" = NULL"
-                        Using quNectUpdateCmd As OdbcCommand = New OdbcCommand(strSQL, updateConnection)
-                            quNectUpdateCmd.ExecuteNonQuery()
-                            quNectUpdateCmd.Dispose()
+                If lblDebug.Visible = False Then
+                    For Each dbid As String In restoredDBIDs
+                        Application.DoEvents()
+                        If dbidToKeyFID(dbid) <> "3" Then
+                            Continue For
+                        End If
+                        Using updateConnection As OdbcConnection = getquNectConn(connectionString)
+                            Dim strSQL = "UPDATE " & dbid & " SET ""QuNect Restore Temporary Record ID#"" = NULL"
+                            Using quNectUpdateCmd As OdbcCommand = New OdbcCommand(strSQL, updateConnection)
+                                quNectUpdateCmd.ExecuteNonQuery()
+                                quNectUpdateCmd.Dispose()
+                            End Using
+                            updateConnection.Close()
                         End Using
-                        updateConnection.Close()
-                    End Using
-                Next
+                    Next
+                End If
                 Me.Cursor = Cursors.Default
                 MsgBox("Restored " & tableCounter & " tables.", MsgBoxStyle.OkOnly, AppName)
             Catch ex As Exception
@@ -1400,7 +1405,15 @@ Public Class frmRestore
         Process.Start("https://qunect.com/flash/UserToken.html")
     End Sub
 
+    Private Sub frmRestore_Click(sender As Object, e As MouseEventArgs) Handles Me.MouseClick
+        If e.Button = MouseButtons.Right And (Control.ModifierKeys = (Keys.Shift Or Keys.Control)) Then
+            lblDebug.Visible = True
+        End If
+    End Sub
 
+    Private Sub lblDebug_MouseClick(sender As Object, e As MouseEventArgs) Handles lblDebug.MouseClick
+        lblDebug.Visible = False
+    End Sub
 End Class
 
 

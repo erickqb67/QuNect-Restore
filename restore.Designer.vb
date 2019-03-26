@@ -55,6 +55,7 @@ Partial Class frmRestore
         Me.FolderBrowserDialog = New System.Windows.Forms.FolderBrowserDialog()
         Me.btnAppToken = New System.Windows.Forms.Button()
         Me.btnUserToken = New System.Windows.Forms.Button()
+        Me.lblDebug = New System.Windows.Forms.Label()
         CType(Me.dgMapping, System.ComponentModel.ISupportInitialize).BeginInit()
         CType(Me.dgCriteria, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.SuspendLayout()
@@ -319,11 +320,22 @@ Partial Class frmRestore
         Me.btnUserToken.Text = "?"
         Me.btnUserToken.UseVisualStyleBackColor = True
         '
+        'lblDebug
+        '
+        Me.lblDebug.AutoSize = True
+        Me.lblDebug.Location = New System.Drawing.Point(906, 12)
+        Me.lblDebug.Name = "lblDebug"
+        Me.lblDebug.Size = New System.Drawing.Size(157, 13)
+        Me.lblDebug.TabIndex = 83
+        Me.lblDebug.Text = "Click me to turn off debug mode"
+        Me.lblDebug.Visible = False
+        '
         'frmRestore
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.ClientSize = New System.Drawing.Size(1128, 924)
+        Me.Controls.Add(Me.lblDebug)
         Me.Controls.Add(Me.btnUserToken)
         Me.Controls.Add(Me.btnAppToken)
         Me.Controls.Add(Me.cmbBulkorSingle)
@@ -390,4 +402,5 @@ Partial Class frmRestore
     Friend WithEvents FolderBrowserDialog As FolderBrowserDialog
     Friend WithEvents btnAppToken As Button
     Friend WithEvents btnUserToken As Button
+    Friend WithEvents lblDebug As Label
 End Class
