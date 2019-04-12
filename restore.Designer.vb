@@ -261,7 +261,7 @@ Partial Class frmRestore
         Me.btnPreview.Name = "btnPreview"
         Me.btnPreview.Size = New System.Drawing.Size(221, 27)
         Me.btnPreview.TabIndex = 41
-        Me.btnPreview.Text = "Preview which rows will be inported"
+        Me.btnPreview.Text = "Preview which rows will be imported"
         Me.btnPreview.UseVisualStyleBackColor = True
         Me.btnPreview.Visible = False
         '
@@ -334,7 +334,7 @@ Partial Class frmRestore
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
-        Me.ClientSize = New System.Drawing.Size(1128, 924)
+        Me.ClientSize = New System.Drawing.Size(1114, 919)
         Me.Controls.Add(Me.lblDebug)
         Me.Controls.Add(Me.btnUserToken)
         Me.Controls.Add(Me.btnAppToken)

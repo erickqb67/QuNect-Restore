@@ -26,6 +26,7 @@ Public Class frmRestore
     Private sourceFieldNames As New Dictionary(Of String, Integer)
     Private destinationLabelsToFids As Dictionary(Of String, String)
     Private isBooleanTrue As Regex = New Regex("y|tr|c|[1-9]", RegexOptions.IgnoreCase Or RegexOptions.Compiled)
+    Private Const fieldNameToContainOldRecordIdNumbers = "QuNect Restore Temporary Record ID#"
     Private Class qdbVersion
         Public year As Integer
         Public major As Integer
@@ -56,7 +57,7 @@ Public Class frmRestore
         malformed
     End Enum
     Private Sub restore_Load(sender As Object, e As EventArgs) Handles Me.Load
-        Text = "QuNect Restore 1.0.0.34" ' & ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString
+        Text = "QuNect Restore 1.0.0.36" ' & ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString
         txtUsername.Text = GetSetting(AppName, "Credentials", "username")
         cmbPassword.SelectedIndex = CInt(GetSetting(AppName, "Credentials", "passwordOrToken", "0"))
         txtPassword.Text = GetSetting(AppName, "Credentials", "password")
@@ -83,8 +84,9 @@ Public Class frmRestore
         For i As Integer = 0 To ops.Count - 1
             DirectCast(dgCriteria.Columns(filter.booleanOperator), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Add(ops(i))
         Next
-
-
+        dgMapping.Anchor = AnchorStyles.Bottom And AnchorStyles.Right
+        dgMapping.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill
+        'dgMapping.Dock = DockStyle.Fill
     End Sub
     Private Function getConnectionString(usefids As Boolean, allFieldNameCharacters As Boolean) As String
         Dim connectionString As String = "Driver={QuNect ODBC for QuickBase};CSVCHUNKSIZE=1000000;uid=" & txtUsername.Text & ";pwd=" & txtPassword.Text & ";QUICKBASESERVER=" & txtServer.Text & ";APPTOKEN=" & txtAppToken.Text
@@ -221,7 +223,7 @@ Public Class frmRestore
         'now we need to map the Record ID# field to the "QuNect Restore Temporary Record ID#" field
         If BuiltInRecordIDisKey Then
             Dim fieldNode As New fieldStruct
-            fieldNode.label = "QuNect Restore Temporary Record ID#"
+            fieldNode.label = fieldNameToContainOldRecordIdNumbers
             fieldNode.fid = getFIDofQuNectRestoreTemporaryRecordID(dbid)
             fieldNode.type = "float"
             fieldNode.base_type = "float"
@@ -1015,7 +1017,7 @@ Public Class frmRestore
             Using connection As OdbcConnection = getquNectConn(connectionString)
                 If keyFID = "3" Then
                     'we need to create a shadow key field
-                    strSQL = "ALTER TABLE """ & dbid & """ ADD ""QuNect Restore Temporary Record ID#"" DOUBLE"
+                    strSQL = "ALTER TABLE """ & dbid & """ ADD """ & fieldNameToContainOldRecordIdNumbers & """ DOUBLE"
                     Using quNectCmd As OdbcCommand = New OdbcCommand(strSQL, connection)
                         Try
                             quNectCmd.ExecuteNonQuery()
@@ -1087,7 +1089,7 @@ Public Class frmRestore
                 While (dr.Read()) 'we are looping through all the fields in the destination table here
                     Dim field As New fieldStruct
                     field.label = dr.GetString(0)
-                    If field.label = "QuNect Restore Temporary Record ID#" Then
+                    If field.label = fieldNameToContainOldRecordIdNumbers Then
                         Continue While
                     End If
                     field.fid = dr.GetString(1)
@@ -1110,12 +1112,9 @@ Public Class frmRestore
                     If Not IsDBNull(dr(8)) Then
                         field.decimal_places = dr.GetInt32(8)
                     End If
-                    If fieldNodes.ContainsKey(field.fid) Then
-                        Throw New System.Exception("Duplicate fid '" & field.fid & "' in " & dbid)
-                    End If
                     fieldNodes.Add(field.fid, field)
                     If destinationLabelsToFids.ContainsKey(field.label) Then
-                        Throw New System.Exception("Duplicate field label '" & field.label & "' in CSV file for " & dbid)
+                        Throw New System.Exception("Duplicate field label '" & field.label & "' in Quick Base destination table: " & dbid)
                     End If
                     destinationLabelsToFids.Add(field.label, field.fid)
                     DirectCast(dgMapping.Columns(mapping.destination), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Add(field.label)
@@ -1127,23 +1126,22 @@ Public Class frmRestore
                         dgMapping.Rows.Clear()
                         For i As Integer = 0 To currentRow.Length - 1
                             Dim sourceFieldName As String = currentRow(i)
-                            If sourceFieldName = "QuNect Restore Temporary Record ID#" Then 'this is just in case this field got backed up. It should be short lived
+                            If sourceFieldName = "" Then
+                                Continue For
+                            End If
+                            If sourceFieldName = fieldNameToContainOldRecordIdNumbers Then 'this is just in case this field got backed up. It should be short lived
                                 'only while QuNect Restore is running and doing a restore
                                 Continue For
                             End If
-                            If sourceFieldName = "" Then
-                                Exit For
+                            If sourceFieldNames.ContainsKey(sourceFieldName) Then
+                                Throw New System.Exception("Duplicate field label '" & sourceFieldName & "' in CSV file: " & lblFile.Text)
                             End If
                             If Not fieldTypes Is Nothing AndAlso fieldTypes.Length = currentRow.Length - 1 Then
                                 sourceLabelToFieldType.Add(sourceFieldName, fieldTypes(i))
                             ElseIf Not clist Is Nothing AndAlso fieldNodes.ContainsKey(clist(i)) Then
                                 sourceLabelToFieldType.Add(sourceFieldName, fieldNodes(clist(i)).type)
                             End If
-                            If sourceFieldName = "" Then Continue For
                             dgMapping.Rows.Add(New String() {sourceFieldName})
-                            If sourceFieldNames.ContainsKey(sourceFieldName) Then
-                                Throw New System.Exception("Duplicate sourceFieldName '" & sourceFieldName & "' in " & dbid)
-                            End If
                             sourceFieldNames.Add(sourceFieldName, i)
                             DirectCast(dgCriteria.Columns(filter.source), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Add(sourceFieldName)
                             guessDestination(clist, sourceFieldName, i)
@@ -1268,7 +1266,7 @@ Public Class frmRestore
                                 If Not dbidToKeyFID.ContainsKey(parentDBID) OrElse dbidToKeyFID(parentDBID) <> "3" Then
                                     Continue While
                                 End If
-                                Dim strReMapSQL As String = "INSERT INTO """ & dbid & """ (""" & dbid & """.fid" & dbidToKeyFID(dbid) & ", """ & dbid & """.fid" & referenceFID & ") SELECT """ & dbid & """.fid" & dbidToKeyFID(dbid) & ", " & parentDBID & ".fid3 FROM " & parentDBID & " INNER JOIN """ & dbid & """  ON " & parentDBID & ".""QuNect Restore Temporary Record ID#"" = """ & dbid & """.fid" & referenceFID & " WHERE " & parentDBID & ".""QuNect Restore Temporary Record ID#"" IS NOT NULL"
+                                Dim strReMapSQL As String = "INSERT INTO """ & dbid & """ (""" & dbid & """.fid" & dbidToKeyFID(dbid) & ", """ & dbid & """.fid" & referenceFID & ") SELECT """ & dbid & """.fid" & dbidToKeyFID(dbid) & ", " & parentDBID & ".fid3 FROM " & parentDBID & " INNER JOIN """ & dbid & """  ON " & parentDBID & ".""" & fieldNameToContainOldRecordIdNumbers & """ = """ & dbid & """.fid" & referenceFID & " WHERE " & parentDBID & ".""" & fieldNameToContainOldRecordIdNumbers & """ IS NOT NULL"
                                 Using reMapConnection As OdbcConnection = getquNectConn(connectionString)
                                     If connection Is Nothing Then Exit Sub
                                     Using quNectReMapCmd As OdbcCommand = New OdbcCommand(strReMapSQL, reMapConnection)
@@ -1291,7 +1289,7 @@ Public Class frmRestore
                             Continue For
                         End If
                         Using updateConnection As OdbcConnection = getquNectConn(connectionString)
-                            Dim strSQL = "UPDATE " & dbid & " SET ""QuNect Restore Temporary Record ID#"" = NULL"
+                            Dim strSQL = "UPDATE " & dbid & " SET """ & fieldNameToContainOldRecordIdNumbers & """ = NULL"
                             Using quNectUpdateCmd As OdbcCommand = New OdbcCommand(strSQL, updateConnection)
                                 quNectUpdateCmd.ExecuteNonQuery()
                                 quNectUpdateCmd.Dispose()
@@ -1414,6 +1412,7 @@ Public Class frmRestore
     Private Sub lblDebug_MouseClick(sender As Object, e As MouseEventArgs) Handles lblDebug.MouseClick
         lblDebug.Visible = False
     End Sub
+
 End Class
 
 
