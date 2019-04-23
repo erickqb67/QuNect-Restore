@@ -57,7 +57,7 @@ Public Class frmRestore
         malformed
     End Enum
     Private Sub restore_Load(sender As Object, e As EventArgs) Handles Me.Load
-        Text = "QuNect Restore 1.0.0.36" ' & ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString
+        Text = "QuNect Restore 1.0.0.37" ' & ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString
         txtUsername.Text = GetSetting(AppName, "Credentials", "username")
         cmbPassword.SelectedIndex = CInt(GetSetting(AppName, "Credentials", "passwordOrToken", "0"))
         txtPassword.Text = GetSetting(AppName, "Credentials", "password")
@@ -817,6 +817,7 @@ Public Class frmRestore
         lblTable.Visible = btnListTables.Visible
         btnSource.Visible = cmbBulkorSingle.Visible And cmbBulkorSingle.SelectedIndex > 0
         lblFile.Visible = cmbBulkorSingle.Visible And cmbBulkorSingle.SelectedIndex > 0
+        ckbDetectProxy.Visible = txtServer.Text.Length > 0 And txtServer.Visible
         chkBxHeaders.Visible = lblFile.Visible And lblFile.Text.Length > 0
         btnPreview.Visible = cmbBulkorSingle.Visible And cmbBulkorSingle.SelectedIndex = 1 And lblTable.Text.Length > 0
         btnImport.Visible = cmbBulkorSingle.Visible And ((cmbBulkorSingle.SelectedIndex > 1 And lblTable.Text.Length > 0) Or btnPreview.Visible)
@@ -883,6 +884,7 @@ Public Class frmRestore
 
     Private Sub OpenSourceFile_FileOk(sender As Object, e As System.ComponentModel.CancelEventArgs) Handles OpenSourceFile.FileOk
         lblFile.Text = OpenSourceFile.FileName.ToString()
+        listFieldsAndReturnKeyFID(lblTable.Text, False)
     End Sub
 
     Private Sub btnListTables_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles btnListTables.Click
