@@ -57,7 +57,7 @@ Public Class frmRestore
         malformed
     End Enum
     Private Sub restore_Load(sender As Object, e As EventArgs) Handles Me.Load
-        Text = "QuNect Restore 1.0.0.37" ' & ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString
+        Text = "QuNect Restore 1.0.0.38" ' & ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString
         txtUsername.Text = GetSetting(AppName, "Credentials", "username")
         cmbPassword.SelectedIndex = CInt(GetSetting(AppName, "Credentials", "passwordOrToken", "0"))
         txtPassword.Text = GetSetting(AppName, "Credentials", "password")
@@ -89,6 +89,11 @@ Public Class frmRestore
         'dgMapping.Dock = DockStyle.Fill
     End Sub
     Private Function getConnectionString(usefids As Boolean, allFieldNameCharacters As Boolean) As String
+        If txtPassword.Text.Contains(";") Then
+            Throw New System.Exception("Although Quick Base allows semicolons in passwords the ODBC standard does not permit semicolons." & vbCrLf & "Please change your Quick Base password to eliminate semicolons or use a Quick Base user token instead of a password.")
+            Return ""
+        End If
+
         Dim connectionString As String = "Driver={QuNect ODBC for QuickBase};CSVCHUNKSIZE=1000000;uid=" & txtUsername.Text & ";pwd=" & txtPassword.Text & ";QUICKBASESERVER=" & txtServer.Text & ";APPTOKEN=" & txtAppToken.Text
         If usefids Then
             connectionString &= ";USEFIDS=1"
