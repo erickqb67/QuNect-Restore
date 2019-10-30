@@ -57,7 +57,8 @@ Public Class frmRestore
         malformed
     End Enum
     Private Sub restore_Load(sender As Object, e As EventArgs) Handles Me.Load
-        Text = "QuNect Restore 1.0.0.38" ' & ApplicationDeployment.CurrentDeployment.CurrentVersion.ToString
+        Dim myBuildInfo As FileVersionInfo = FileVersionInfo.GetVersionInfo(Application.ExecutablePath)
+        Me.Text = "QuNect Restore " & myBuildInfo.ProductVersion
         txtUsername.Text = GetSetting(AppName, "Credentials", "username")
         cmbPassword.SelectedIndex = CInt(GetSetting(AppName, "Credentials", "passwordOrToken", "0"))
         txtPassword.Text = GetSetting(AppName, "Credentials", "password")
@@ -79,7 +80,6 @@ Public Class frmRestore
             chkBxHeaders.Checked = False
         End If
 
-        Dim myBuildInfo As FileVersionInfo = FileVersionInfo.GetVersionInfo(Application.ExecutablePath)
         Dim ops As String() = New String() {"has any value", "equals", "does not equal", "greater than", "greater than or equal", "less than", "less than or equal", "contains", "does not contain", "starts with", "does not start with", "is null", "is not null"}
         For i As Integer = 0 To ops.Count - 1
             DirectCast(dgCriteria.Columns(filter.booleanOperator), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Add(ops(i))
@@ -447,6 +447,8 @@ Public Class frmRestore
                                         improperlyFormattedLines &= vbCrLf & "There may be additional errors beyond the ones above."
                                         Exit While
                                     End If
+                                Else
+                                    Throw New Exception("line " & fileLineCounter & " in '" & lblFile.Text & "' has an issue. " & ex.Message)
                                 End If
                             End Try
                             lineCounter += 1
@@ -1131,10 +1133,16 @@ Public Class frmRestore
                     Try
                         currentRow = csvReader.ReadFields()
                         dgMapping.Rows.Clear()
+                        Dim j As Integer = 0
                         For i As Integer = 0 To currentRow.Length - 1
                             Dim sourceFieldName As String = currentRow(i)
                             If sourceFieldName = "" Then
-                                Continue For
+                                If i = currentRow.Length - 1 Then
+                                    Continue For
+                                Else
+                                    sourceFieldName = "Column Number " & i + 1
+                                End If
+
                             End If
                             If sourceFieldName = fieldNameToContainOldRecordIdNumbers Then 'this is just in case this field got backed up. It should be short lived
                                 'only while QuNect Restore is running and doing a restore
@@ -1151,8 +1159,8 @@ Public Class frmRestore
                             dgMapping.Rows.Add(New String() {sourceFieldName})
                             sourceFieldNames.Add(sourceFieldName, i)
                             DirectCast(dgCriteria.Columns(filter.source), System.Windows.Forms.DataGridViewComboBoxColumn).Items.Add(sourceFieldName)
-                            guessDestination(clist, sourceFieldName, i)
-
+                            guessDestination(clist, sourceFieldName, j)
+                            j += 1
                         Next
 
                     Catch ex As Microsoft.VisualBasic.FileIO.MalformedLineException
@@ -1239,7 +1247,12 @@ Public Class frmRestore
                     lblTable.Text = tableName
                     Dim keyfid As String = listFieldsAndReturnKeyFID(tableName, True)
                     dbidToKeyFID.Add(dbid, keyfid)
-                    restoreTable(False, False, True)
+                    Try
+                        restoreTable(False, False, True)
+                    Catch ex As Exception
+                        MsgBox("Restoring " & tableName & " from " & fri.FullName & " failed because: " & ex.Message, MsgBoxStyle.OkOnly, AppName)
+                    End Try
+
                     tableCounter += 1
                 Next fri
                 'now we have to go through all the dbids that we restored to see if there are any relationships between these tables
