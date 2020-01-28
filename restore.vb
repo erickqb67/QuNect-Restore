@@ -56,15 +56,27 @@ Public Class frmRestore
         unique
         malformed
     End Enum
+    Enum BulkOrSingle
+        Neither = 0
+        One = 1
+        TwoOrMore = 2
+    End Enum
+    Enum PasswordOrToken
+        Neither = 0
+        password = 1
+        token = 2
+    End Enum
+    Private cmdLineArgs() As String
+
     Private Sub restore_Load(sender As Object, e As EventArgs) Handles Me.Load
         Dim myBuildInfo As FileVersionInfo = FileVersionInfo.GetVersionInfo(Application.ExecutablePath)
         Me.Text = "QuNect Restore " & myBuildInfo.ProductVersion
         txtUsername.Text = GetSetting(AppName, "Credentials", "username")
-        cmbPassword.SelectedIndex = CInt(GetSetting(AppName, "Credentials", "passwordOrToken", "0"))
+        cmbPassword.SelectedIndex = CInt(GetSetting(AppName, "Credentials", "passwordOrToken", CStr(PasswordOrToken.Neither)))
         txtPassword.Text = GetSetting(AppName, "Credentials", "password")
         txtServer.Text = GetSetting(AppName, "Credentials", "server", "")
         txtAppToken.Text = GetSetting(AppName, "Credentials", "apptoken", "")
-        cmbBulkorSingle.SelectedIndex = CInt(GetSetting(AppName, "config", "bulkOrSingle", "0"))
+        cmbBulkorSingle.SelectedIndex = CInt(GetSetting(AppName, "config", "bulkOrSingle", CStr(BulkOrSingle.Neither)))
         lblFile.Text = GetSetting(AppName, "config", "file", "")
         lblTable.Text = GetSetting(AppName, "config", "table", "")
         Dim detectProxySetting As String = GetSetting(AppName, "Credentials", "detectproxysettings", "0")
@@ -87,6 +99,17 @@ Public Class frmRestore
         dgMapping.Anchor = AnchorStyles.Bottom And AnchorStyles.Right
         dgMapping.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill
         'dgMapping.Dock = DockStyle.Fill
+        cmdLineArgs = System.Environment.GetCommandLineArgs()
+        If cmdLineArgs.Length = 5 Then
+            lblFile.Text = cmdLineArgs(1)
+            txtUsername.Text = cmdLineArgs(2)
+            txtPassword.Text = cmdLineArgs(3)
+            txtServer.Text = cmdLineArgs(4)
+            cmbPassword.SelectedIndex = PasswordOrToken.token
+            cmbBulkorSingle.SelectedIndex = BulkOrSingle.TwoOrMore
+            Import()
+            Me.Close()
+        End If
     End Sub
     Private Function getConnectionString(usefids As Boolean, allFieldNameCharacters As Boolean) As String
         If txtPassword.Text.Contains(";") Then
@@ -101,11 +124,11 @@ Public Class frmRestore
         If allFieldNameCharacters Then
             connectionString &= ";FIELDNAMECHARACTERS=all"
         End If
-        If cmbPassword.SelectedIndex = 0 Then
+        If cmbPassword.SelectedIndex = PasswordOrToken.Neither Then
             cmbPassword.Focus()
             Throw New System.Exception("Please indicate whether you are using a password or a user token.")
             Return ""
-        ElseIf cmbPassword.SelectedIndex = 1 Then
+        ElseIf cmbPassword.SelectedIndex = PasswordOrToken.password Then
             connectionString &= ";PWDISPASSWORD=1"
         Else
             connectionString &= ";PWDISPASSWORD=0"
@@ -160,7 +183,7 @@ Public Class frmRestore
         Dim drPreview As DataRow = Nothing
         Dim m As Match = Regex.Match(lblFile.Text, "\.csv$", RegexOptions.IgnoreCase)
         If Not m.Success Then
-            MsgBox("Cannot restore from a non CSV file: " & lblFile.Text, MsgBoxStyle.OkOnly, AppName)
+            PopUpMsgBox("Cannot restore from a non CSV file: " & lblFile.Text, MsgBoxStyle.OkOnly, AppName)
             restoreTable = False
             Exit Function
         End If
@@ -206,7 +229,7 @@ Public Class frmRestore
                 fields.Add(fieldNode)
                 Dim fid As String = fieldNode.fid
                 If fidsForImport.Contains(fid) Then
-                    MsgBox("You cannot import two different columns into the same field: " & destComboBoxCell.Value, MsgBoxStyle.OkOnly, AppName)
+                    PopUpMsgBox("You cannot import two different columns into the same field: " & destComboBoxCell.Value, MsgBoxStyle.OkOnly, AppName)
                     restoreTable = False
                     Exit Function
                 End If
@@ -457,7 +480,7 @@ Public Class frmRestore
                         If Not checkForErrorsOnly Then
                             transaction.Commit()
                             If Not bulkRestore Then
-                                MsgBox("Imported " & lineCounter & " records!", MsgBoxStyle.OkOnly, AppName)
+                                PopUpMsgBox("Imported " & lineCounter & " records!", MsgBoxStyle.OkOnly, AppName)
                             End If
                         Else
                             restoreTable = showErrors(previewOnly, conversionErrors, improperlyFormattedLines, uniqueFieldErrors, requiredFieldsErrors, missingRIDs)
@@ -470,7 +493,7 @@ Public Class frmRestore
                             frmPreview.ShowDialog()
                         End If
                     Catch ex As Exception
-                        MsgBox("Could Not import because " & ex.Message & " " & strSQL)
+                        PopUpMsgBox("Could Not import because " & ex.Message & " " & strSQL)
                         restoreTable = False
                     Finally
                         lblProgress.Text = ""
@@ -812,28 +835,28 @@ Public Class frmRestore
     End Function
     Sub showHideControls()
         cmbPassword.Visible = txtUsername.Text.Length > 0
-        txtPassword.Visible = cmbPassword.SelectedIndex > 0
-        txtServer.Visible = txtUsername.Text.Length > 0 And txtPassword.Text.Length > 0 And cmbPassword.SelectedIndex > 0
+        txtPassword.Visible = cmbPassword.SelectedIndex > PasswordOrToken.Neither
+        txtServer.Visible = txtUsername.Text.Length > 0 And txtPassword.Text.Length > 0 And cmbPassword.SelectedIndex > PasswordOrToken.Neither
         lblServer.Visible = txtServer.Visible
-        cmbBulkorSingle.Visible = txtUsername.Text.Length > 0 And cmbPassword.SelectedIndex > 0 And txtPassword.Text.Length > 0 And txtServer.Text.Length > 0
-        txtAppToken.Visible = txtUsername.Text.Length > 0 And cmbPassword.SelectedIndex = 1 And txtPassword.Text.Length > 0 And txtServer.Text.Length > 0
+        cmbBulkorSingle.Visible = txtUsername.Text.Length > 0 And cmbPassword.SelectedIndex > PasswordOrToken.Neither And txtPassword.Text.Length > 0 And txtServer.Text.Length > 0
+        txtAppToken.Visible = txtUsername.Text.Length > 0 And cmbPassword.SelectedIndex = PasswordOrToken.password And txtPassword.Text.Length > 0 And txtServer.Text.Length > 0
         lblAppToken.Visible = txtAppToken.Visible
         btnAppToken.Visible = txtAppToken.Visible
-        btnUserToken.Visible = txtUsername.Text.Length > 0 And cmbPassword.SelectedIndex = 2
-        btnListTables.Visible = txtUsername.Text.Length > 0 And cmbPassword.SelectedIndex > 0 And txtPassword.Text.Length > 0 And txtServer.Text.Length > 0 And cmbBulkorSingle.SelectedIndex = 1 And lblFile.Text.Length > 0
+        btnUserToken.Visible = txtUsername.Text.Length > 0 And cmbPassword.SelectedIndex = PasswordOrToken.token
+        btnListTables.Visible = txtUsername.Text.Length > 0 And cmbPassword.SelectedIndex > PasswordOrToken.Neither And txtPassword.Text.Length > 0 And txtServer.Text.Length > 0 And cmbBulkorSingle.SelectedIndex = BulkOrSingle.One And lblFile.Text.Length > 0
         lblTable.Visible = btnListTables.Visible
-        btnSource.Visible = cmbBulkorSingle.Visible And cmbBulkorSingle.SelectedIndex > 0
-        lblFile.Visible = cmbBulkorSingle.Visible And cmbBulkorSingle.SelectedIndex > 0
+        btnSource.Visible = cmbBulkorSingle.Visible And cmbBulkorSingle.SelectedIndex > BulkOrSingle.Neither
+        lblFile.Visible = cmbBulkorSingle.Visible And cmbBulkorSingle.SelectedIndex > BulkOrSingle.Neither
         ckbDetectProxy.Visible = txtServer.Text.Length > 0 And txtServer.Visible
         chkBxHeaders.Visible = lblFile.Visible And lblFile.Text.Length > 0
-        btnPreview.Visible = cmbBulkorSingle.Visible And cmbBulkorSingle.SelectedIndex = 1 And lblTable.Text.Length > 0
-        btnImport.Visible = cmbBulkorSingle.Visible And ((cmbBulkorSingle.SelectedIndex > 1 And lblTable.Text.Length > 0) Or btnPreview.Visible)
+        btnPreview.Visible = cmbBulkorSingle.Visible And cmbBulkorSingle.SelectedIndex = BulkOrSingle.One And lblTable.Text.Length > 0
+        btnImport.Visible = cmbBulkorSingle.Visible And ((cmbBulkorSingle.SelectedIndex > BulkOrSingle.One And lblTable.Text.Length > 0) Or btnPreview.Visible)
         dgCriteria.Visible = btnPreview.Visible
         dgMapping.Visible = btnPreview.Visible
-        If cmbBulkorSingle.SelectedIndex = 1 Then
+        If cmbBulkorSingle.SelectedIndex = BulkOrSingle.One Then
             btnSource.Text = "Choose file to import"
             btnImport.Text = "Import from CSV file"
-        ElseIf cmbBulkorSingle.SelectedIndex = 2 Then
+        ElseIf cmbBulkorSingle.SelectedIndex = BulkOrSingle.TwoOrMore Then
             btnSource.Text = "Choose folder to import"
             btnImport.Text = "Import from folder of CSV files"
         End If
@@ -845,7 +868,7 @@ Public Class frmRestore
     End Sub
     Private Sub cmbPassword_SelectedIndexChanged(sender As Object, e As EventArgs) Handles cmbPassword.SelectedIndexChanged
         SaveSetting(AppName, "Credentials", "passwordOrToken", cmbPassword.SelectedIndex)
-        If lblTable.Text.Length > 0 And cmbBulkorSingle.SelectedIndex = 1 Then
+        If lblTable.Text.Length > 0 And cmbBulkorSingle.SelectedIndex = BulkOrSingle.One Then
             listFieldsAndReturnKeyFID(lblTable.Text, False)
         End If
         showHideControls()
@@ -868,7 +891,7 @@ Public Class frmRestore
     Private Sub lblTable_TextChanged(sender As Object, e As EventArgs) Handles lblTable.TextChanged
         SaveSetting(AppName, "config", "table", lblTable.Text)
         showHideControls()
-        If lblTable.Text.Length > 0 And cmbBulkorSingle.SelectedIndex = 1 Then
+        If lblTable.Text.Length > 0 And cmbBulkorSingle.SelectedIndex = BulkOrSingle.One Then
             listFieldsAndReturnKeyFID(lblTable.Text, False)
         End If
     End Sub
@@ -879,7 +902,7 @@ Public Class frmRestore
     End Sub
 
     Private Sub btnSource_Click(sender As Object, e As EventArgs) Handles btnSource.Click
-        If cmbBulkorSingle.SelectedIndex = 2 Then
+        If cmbBulkorSingle.SelectedIndex = BulkOrSingle.TwoOrMore Then
             If (FolderBrowserDialog.ShowDialog() = DialogResult.OK) Then
                 lblFile.Text = FolderBrowserDialog.SelectedPath.ToString()
                 btnImport.Visible = True
@@ -909,7 +932,7 @@ Public Class frmRestore
             End Using
         Catch ex As Exception
             Me.Cursor = Cursors.Default
-            MsgBox(ex.Message)
+            PopUpMsgBox(ex.Message)
         End Try
     End Sub
     Sub listTablesFromGetSchema(tables As DataTable)
@@ -969,7 +992,7 @@ Public Class frmRestore
                         dr = quNectCmd.ExecuteReader()
                     Catch excpt As Exception
                         quNectCmd.Dispose()
-                        MsgBox(excpt.Message, MsgBoxStyle.OkOnly, AppName)
+                        PopUpMsgBox(excpt.Message, MsgBoxStyle.OkOnly, AppName)
                         Exit Function
                     End Try
                     If Not dr.HasRows Then
@@ -981,7 +1004,7 @@ Public Class frmRestore
                 End Using
             End Using
         Catch ex As Exception
-            MsgBox("Could not get fid of 'QuNect Restore Temporary Record ID#' in " & dbid & " " & ex.Message)
+            PopUpMsgBox("Could not get fid of 'QuNect Restore Temporary Record ID#' in " & dbid & " " & ex.Message)
         End Try
     End Function
     Function preparePotentialParent(dbid As String) As Boolean
@@ -1001,7 +1024,7 @@ Public Class frmRestore
                         dr = quNectCmd.ExecuteReader()
                     Catch excpt As Exception
                         quNectCmd.Dispose()
-                        MsgBox(excpt.Message, MsgBoxStyle.OkOnly, AppName)
+                        PopUpMsgBox(excpt.Message, MsgBoxStyle.OkOnly, AppName)
                         Exit Function
                     End Try
                     If Not dr.HasRows Then
@@ -1042,7 +1065,7 @@ Public Class frmRestore
                 End If
             End Using
         Catch ex As Exception
-            MsgBox("Could not prepare potential parent " & dbid & " " & ex.Message)
+            PopUpMsgBox("Could not prepare potential parent " & dbid & " " & ex.Message)
         End Try
     End Function
     Function listFieldsAndReturnKeyFID(dbid As String, bulkRestore As Boolean) As String
@@ -1065,7 +1088,7 @@ Public Class frmRestore
                     dr = quNectCmd.ExecuteReader()
                 Catch excpt As Exception
                     quNectCmd.Dispose()
-                    MsgBox(excpt.Message, MsgBoxStyle.OkOnly, AppName)
+                    PopUpMsgBox(excpt.Message, MsgBoxStyle.OkOnly, AppName)
                     Exit Function
                 End Try
                 If Not dr.HasRows Then
@@ -1164,7 +1187,7 @@ Public Class frmRestore
                         Next
 
                     Catch ex As Microsoft.VisualBasic.FileIO.MalformedLineException
-                        MsgBox("First line Of file Is malformed, cannot display field names.")
+                        PopUpMsgBox("First line Of file Is malformed, cannot display field names.")
 
                     End Try
                 End If
@@ -1175,7 +1198,7 @@ Public Class frmRestore
             End If
 
         Catch ex As Exception
-            MsgBox(ex.Message)
+            PopUpMsgBox(ex.Message)
         End Try
 
     End Function
@@ -1217,7 +1240,10 @@ Public Class frmRestore
         tableNameToDBID = dbidMatch.Value
     End Function
     Private Sub btnImport_Click(sender As Object, e As EventArgs) Handles btnImport.Click
-        If cmbBulkorSingle.SelectedIndex = 2 Then
+        Import()
+    End Sub
+    Private Sub Import()
+        If cmbBulkorSingle.SelectedIndex = BulkOrSingle.TwoOrMore Then
             Me.Cursor = Cursors.WaitCursor
             btnSource.Enabled = False
             cmbBulkorSingle.Enabled = False
@@ -1250,7 +1276,7 @@ Public Class frmRestore
                     Try
                         restoreTable(False, False, True)
                     Catch ex As Exception
-                        MsgBox("Restoring " & tableName & " from " & fri.FullName & " failed because: " & ex.Message, MsgBoxStyle.OkOnly, AppName)
+                        PopUpMsgBox("Restoring " & tableName & " from " & fri.FullName & " failed because: " & ex.Message, MsgBoxStyle.OkOnly, AppName)
                     End Try
 
                     tableCounter += 1
@@ -1319,10 +1345,10 @@ Public Class frmRestore
                     Next
                 End If
                 Me.Cursor = Cursors.Default
-                MsgBox("Restored " & tableCounter & " tables.", MsgBoxStyle.OkOnly, AppName)
+                PopUpMsgBox("Restored " & tableCounter & " tables.", MsgBoxStyle.OkOnly, AppName)
             Catch ex As Exception
                 Me.Cursor = Cursors.Default
-                MsgBox("Could not import." & ex.Message, MsgBoxStyle.OkOnly, AppName)
+                PopUpMsgBox("Could not import." & ex.Message, MsgBoxStyle.OkOnly, AppName)
             Finally
                 Me.Cursor = Cursors.Default
                 lblFile.Text = strFolder
@@ -1335,10 +1361,16 @@ Public Class frmRestore
             restoreTable(False, False, False)
         End If
     End Sub
-
-
-
-
+    Private Sub PopUpMsgBox(msg As String)
+        If cmdLineArgs.Length <= 1 Then
+            MsgBox(msg)
+        End If
+    End Sub
+    Private Sub PopUpMsgBox(msg As String, Style As MsgBoxStyle, Title As String)
+        If cmdLineArgs.Length <= 1 Then
+            MsgBox(msg, Style, Title)
+        End If
+    End Sub
 
     Private Sub dgCriteria_CellEnter(sender As Object, e As DataGridViewCellEventArgs) Handles dgCriteria.CellEnter
         dtPicker.Visible = False
