@@ -100,11 +100,21 @@ Public Class frmRestore
         dgMapping.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill
         'dgMapping.Dock = DockStyle.Fill
         cmdLineArgs = System.Environment.GetCommandLineArgs()
-        If cmdLineArgs.Length = 5 Then
+        If cmdLineArgs.Length = 7 Then
             lblFile.Text = cmdLineArgs(1)
             txtUsername.Text = cmdLineArgs(2)
             txtPassword.Text = cmdLineArgs(3)
             txtServer.Text = cmdLineArgs(4)
+            If cmdLineArgs(5) = "1" Then
+                ckbDetectProxy.Checked = True
+            Else
+                ckbDetectProxy.Checked = False
+            End If
+            If cmdLineArgs(6) = "1" Then
+                chkBxHeaders.Checked = True
+            Else
+                chkBxHeaders.Checked = False
+            End If
             cmbPassword.SelectedIndex = PasswordOrToken.token
             cmbBulkorSingle.SelectedIndex = BulkOrSingle.TwoOrMore
             Import()
