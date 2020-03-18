@@ -187,7 +187,7 @@ Public Class frmRestore
     End Function
     Private Function restoreTable(checkForErrorsOnly As Boolean, previewOnly As Boolean, bulkRestore As Boolean) As Boolean
         restoreTable = True
-        Dim processOrderFoMappingRows = New ArrayList
+        Dim processOrderForMappingRows = New ArrayList
         Dim dsPreview As New DataSet
         Dim dtPreview As New DataTable
         Dim drPreview As DataRow = Nothing
@@ -246,10 +246,10 @@ Public Class frmRestore
                 fidsForImport.Add(fid)
                 If fid = "3" Then ridIsMapped = True
                 If fid = keyfid Then
-                    processOrderFoMappingRows.Insert(0, columnsMapped)
+                    processOrderForMappingRows.Insert(0, columnsMapped)
                     keyIsMapped = True
                 Else
-                    processOrderFoMappingRows.Add(columnsMapped)
+                    processOrderForMappingRows.Add(columnsMapped)
                 End If
                 fids.Add(fid)
                 vals.Add("?")
@@ -266,7 +266,7 @@ Public Class frmRestore
             fieldNode.type = "float"
             fieldNode.base_type = "float"
             fieldNodes.Add(fieldNode.fid, fieldNode)
-            processOrderFoMappingRows.Add(columnsMapped)
+            processOrderForMappingRows.Add(columnsMapped)
             fids.Add(fieldNode.fid)
             vals.Add("?")
             importThese.Add(importThese(0))
@@ -300,7 +300,14 @@ Public Class frmRestore
                                 'do we need this hashset to check the imported values? We would need to check to see if we were updating an existing record or creating a new record
                                 'if we have a 
                                 If Not ridIsMapped Then
-                                    uniqueExistingFieldValues.Add(fid, getHashSetofFieldValues(dbid, fid))
+                                    If uniqueExistingFieldValues.ContainsKey(fid) Then
+                                        PopUpMsgBox("The fid " & fid & " appeared twice in fieldNodes Dictionary(Of String, fieldStruct)", MsgBoxStyle.OkOnly, AppName)
+                                        restoreTable = False
+                                        Exit Function
+                                    Else
+                                        uniqueExistingFieldValues.Add(fid, getHashSetofFieldValues(dbid, fid))
+                                    End If
+
                                 End If
                             End If
                         End If
@@ -388,8 +395,8 @@ Public Class frmRestore
                                     drPreview = dtPreview.NewRow()
                                 End If
                                 Dim importingIntoExistingRecord As Boolean = False
-                                For k As Integer = 0 To processOrderFoMappingRows.Count - 1
-                                    Dim i As Integer = processOrderFoMappingRows(k)
+                                For k As Integer = 0 To processOrderForMappingRows.Count - 1
+                                    Dim i As Integer = processOrderForMappingRows(k)
                                     Dim val As String = currentRow(importThese(i))
                                     If previewOnly Then
                                         drPreview(i) = val
